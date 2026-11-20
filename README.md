@@ -5,6 +5,11 @@ Changes show on the strip immediately; **Save** makes them permanent (Desktop an
 
 > Status: version 1.0.0. This README is also the working spec.
 
+<p>
+  <img src="docs/screenshots/editor.png" alt="The editor showing the Synthwave design" width="420">
+  <img src="docs/screenshots/gradient.png" alt="A gradient applied to seven selected LEDs" width="420">
+</p>
+
 ## Install
 
 - **From Discover or Plasma:** right-click the panel → *Add or Manage Widgets* → *Get New Widgets* →
