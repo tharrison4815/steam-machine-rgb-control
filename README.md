@@ -3,8 +3,8 @@
 A KDE Plasma 6 widget for customising the Steam Machine's front LED strip from Desktop Mode, with
 the option to save your design so Game Mode uses it too.
 
-> Status: in development. Done: live strip editor, blended preview, gradients, presets, share codes.
-> Still to do: Save for Game Mode, the "Unsaved" indicator and the Advanced (boot colour) options.
+> Status: in development. All planned features are implemented; Save for Game Mode and the boot
+> colour still need testing on the device. Not yet packaged for the KDE Store.
 > This README is the working spec.
 
 ## Why
@@ -71,7 +71,10 @@ easy to share.
 ### Save for Game Mode
 - Explains that Steam must be closed, refuses if a game is running, closes Steam, waits until it
   has fully exited and finished writing its config, then backs up, writes and verifies
-  `localconfig.vdf`. Asks the user to reopen Steam; it never starts Steam itself.
+  `localconfig.vdf`. Never starts Steam by itself: afterwards it offers a **Reopen Steam** button,
+  which opens `steam://open/main` through the normal desktop launcher (like the app menu).
+- Backups are written next to the file as `localconfig.vdf.smrgb-backup-<timestamp>`; the newest 5
+  are kept.
 - Sets Steam's "separate colours" option on when colours differ.
 - Converts colours to the nearest value Game Mode can reproduce, and warns when they'll look
   different.

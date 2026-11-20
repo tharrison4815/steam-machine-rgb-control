@@ -60,3 +60,40 @@ function speedToDelay(speed) {
 function delayToSpeed(d) {
     return 1 - Math.max(0, Math.min(20, d)) / 20;
 }
+
+// --- Game Mode colour conversion (must match smrgb-helper) ---
+// Steam stores 0..1 values: v >= 0.95 -> 255, else q = round(v*255), level = floor(255*(q/255)^2.2).
+// So only some levels are reachable (none from 228 to 254).
+
+function steamToLevel(v) {
+    if (v >= 0.95) {
+        return 255;
+    }
+    const q = Math.floor(v * 255 + 0.5);
+    return Math.floor(255 * Math.pow(q / 255, 2.2));
+}
+
+const reachable = (function () {
+    const seen = {};
+    const out = [];
+    for (let q = 0; q <= 242; q++) {
+        const l = steamToLevel(q / 255);
+        if (!seen[l]) {
+            seen[l] = true;
+            out.push(l);
+        }
+    }
+    out.push(255);
+    return out.sort((a, b) => a - b);
+})();
+
+// Nearest level Game Mode can reproduce (ties go to the lower level, like the helper)
+function toGameMode(level) {
+    let best = reachable[0];
+    for (const r of reachable) {
+        if (Math.abs(r - level) < Math.abs(best - level)) {
+            best = r;
+        }
+    }
+    return best;
+}

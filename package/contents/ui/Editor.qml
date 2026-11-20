@@ -16,6 +16,8 @@ ColumnLayout {
 
     Layout.preferredWidth: Kirigami.Units.gridUnit * 32
     Layout.minimumWidth: Kirigami.Units.gridUnit * 30
+    Layout.minimumHeight: implicitHeight
+    Layout.preferredHeight: implicitHeight
     spacing: Kirigami.Units.largeSpacing
 
     property var cols: []
@@ -45,6 +47,23 @@ ColumnLayout {
                                  : selected.length > 0 ? cols[hwIndex(selected[0])] : [0, 0, 0]
     readonly property bool coloursEditable: effect !== "rainbow" && selected.length > 0
 
+    // ---- Game Mode ----
+    // What Game Mode would actually show for the current colours (it can't reproduce every level)
+    readonly property var gmCols: cols.map(c => c.map(C.toGameMode))
+    readonly property int gmDiffCount: cols.filter(c => !C.same(c, c.map(C.toGameMode))).length
+    readonly property bool saveAvailable: !!(hw.saved && hw.saved.available)
+    readonly property bool unsaved: saveAvailable && n > 0 && !(
+        sameCols(gmCols, hw.saved.colours) && effect === hw.saved.effect && scale === hw.saved.scale
+        && (effect === "manual" || delay === hw.saved.delay) && hw.saved.enabled === 1)
+    property bool confirmingSave: false
+    property var saveResult: null        // last save's result, shown until the next edit or save
+
+    // ---- Advanced: boot colour ----
+    property bool advancedOpen: false
+    property var bootColour: [1, 90, 255]
+    property int bootScale: 56
+    property var originalBoot: null      // first boot colour seen this session, for "Restore"
+
     readonly property var effects: [
         { text: "Solid", value: "manual" },
         { text: "Breathe", value: "breath" },
@@ -65,11 +84,47 @@ ColumnLayout {
         delay = hw.delay;
         undoStack = [];
         redoStack = [];
+        loadBoot();
         if (selected.length === 0 || selected.some(p => p >= n)) {
             selected = [];
             anchor = -1;
         }
         syncControls();
+    }
+
+    function sameCols(a, b) {
+        return !!a && !!b && a.length === b.length && a.every((c, i) => C.same(c, b[i]));
+    }
+
+    function startSave() {
+        commitEdits();
+        confirmingSave = false;
+        saveResult = null;
+        hw.save({ colours: cols, effect: effect, enabled: 1, scale: scale, delay: delay });
+    }
+
+    Connections {
+        target: ed.hw
+        function onSaveFinished(result) {
+            ed.saveResult = result;
+        }
+    }
+
+    function loadBoot() {
+        if (hw.startup) {
+            bootColour = hw.startup.colour.slice();
+            bootScale = hw.startup.scale;
+            if (!originalBoot) {
+                originalBoot = { colour: bootColour.slice(), scale: bootScale };
+            }
+            bootHex.text = C.toHex(bootColour);
+            bootSlider.value = C.scaleToBrightness(bootScale);
+        }
+    }
+
+    function applyBoot() {
+        hw.apply({ startup_colour: bootColour, startup_scale: bootScale });
+        hw.startup = { colour: bootColour.slice(), scale: bootScale };
     }
 
     function syncControls() {
@@ -115,6 +170,7 @@ ColumnLayout {
             lastMergeTime = now;
             return;
         }
+        saveResult = null;
         undoStack = undoStack.concat([snapshot()]).slice(-200);
         redoStack = [];
         lastMerge = mergeKey || "";
@@ -788,6 +844,203 @@ ColumnLayout {
             text: ed.scale <= 2 ? "The strip is off at this brightness."
                                 : C.levelsForScale(ed.scale) + " colour levels per channel at this brightness"
                                   + (C.levelsForScale(ed.scale) < 32 ? ": gradients will look stepped." : ".")
+        }
+    }
+
+    Kirigami.Separator {
+        Layout.fillWidth: true
+    }
+
+    // ================= Save for Game Mode =================
+    RowLayout {
+        Layout.fillWidth: true
+
+        Kirigami.Icon {
+            implicitWidth: Kirigami.Units.iconSizes.small
+            implicitHeight: Kirigami.Units.iconSizes.small
+            source: !ed.saveAvailable ? "dialog-information" : ed.unsaved ? "emblem-warning" : "emblem-ok-symbolic"
+        }
+        PlasmaComponents3.Label {
+            Layout.fillWidth: true
+            wrapMode: Text.WordWrap
+            text: !ed.hw.saved ? "Checking Game Mode settings…"
+                : !ed.saveAvailable ? ed.hw.saved.reason
+                : ed.unsaved ? "<b>Unsaved.</b> Steam will put back its saved design the next time it starts (including at login)."
+                : "Game Mode uses this design."
+        }
+        PlasmaComponents3.Button {
+            text: "Save for Game Mode…"
+            icon.name: "document-save"
+            visible: ed.saveAvailable
+            enabled: !ed.hw.saving && !ed.confirmingSave
+            onClicked: {
+                ed.commitEdits();
+                ed.saveResult = null;
+                ed.confirmingSave = true;
+                ed.hw.refresh();          // up-to-date "is Steam running?"
+            }
+        }
+    }
+
+    Kirigami.InlineMessage {
+        Layout.fillWidth: true
+        type: Kirigami.MessageType.Warning
+        visible: ed.saveAvailable && ed.gmDiffCount > 0 && ed.effect !== "rainbow"
+        text: (ed.gmDiffCount === 1 ? "1 LED uses a colour" : ed.gmDiffCount + " LEDs use colours")
+              + " Game Mode can't show exactly (usually very light tints). Saving uses the nearest colour it can show."
+        actions: [
+            Kirigami.Action {
+                text: "Preview Game Mode colours"
+                icon.name: "view-preview"
+                onTriggered: ed.applyColours(ed.gmCols)
+            }
+        ]
+    }
+
+    Kirigami.InlineMessage {
+        Layout.fillWidth: true
+        type: Kirigami.MessageType.Information
+        visible: ed.confirmingSave && !ed.hw.saving
+        text: ed.hw.steamRunning
+              ? "Steam has to close while saving, because it overwrites its settings when it exits. "
+                + "Saving will close Steam now (close any game first), save the design, and then you can reopen Steam."
+              : "Steam is closed, so the design will be saved straight away."
+        actions: [
+            Kirigami.Action {
+                text: ed.hw.steamRunning ? "Close Steam and save" : "Save"
+                icon.name: "document-save"
+                onTriggered: ed.startSave()
+            },
+            Kirigami.Action {
+                text: "Cancel"
+                icon.name: "dialog-cancel"
+                onTriggered: ed.confirmingSave = false
+            }
+        ]
+    }
+
+    RowLayout {
+        visible: ed.hw.saving
+        PlasmaComponents3.BusyIndicator {
+            implicitWidth: Kirigami.Units.iconSizes.medium
+            implicitHeight: Kirigami.Units.iconSizes.medium
+            running: ed.hw.saving
+        }
+        PlasmaComponents3.Label {
+            text: ed.hw.steamRunning ? "Waiting for Steam to close, then saving…" : "Saving…"
+        }
+    }
+
+    Kirigami.InlineMessage {
+        Layout.fillWidth: true
+        visible: ed.saveResult !== null
+        type: ed.saveResult && ed.saveResult.ok ? Kirigami.MessageType.Positive : Kirigami.MessageType.Error
+        showCloseButton: true
+        onVisibleChanged: if (!visible) ed.saveResult = null
+        text: !ed.saveResult ? ""
+              : !ed.saveResult.ok ? ed.saveResult.error
+              : ed.saveResult.steamWasRunning ? "Saved. Steam is closed: reopen it when you're ready."
+              : "Saved. Game Mode will use this design."
+        actions: [
+            Kirigami.Action {
+                text: "Reopen Steam"
+                icon.name: "steam"
+                visible: !!(ed.saveResult && ed.saveResult.ok && ed.saveResult.steamWasRunning)
+                // Opens Steam through its normal desktop launcher, like the app menu does
+                onTriggered: Qt.openUrlExternally("steam://open/main")
+            }
+        ]
+    }
+
+    // ================= Advanced =================
+    PlasmaComponents3.ToolButton {
+        text: "Advanced"
+        icon.name: ed.advancedOpen ? "arrow-down" : "arrow-right"
+        onClicked: ed.advancedOpen = !ed.advancedOpen
+        visible: ed.hw.startup !== null
+    }
+
+    ColumnLayout {
+        Layout.fillWidth: true
+        visible: ed.advancedOpen && ed.hw.startup !== null
+
+        Kirigami.InlineMessage {
+            Layout.fillWidth: true
+            visible: true
+            type: Kirigami.MessageType.Warning
+            text: "The boot colour is what the strip shows while the machine starts, before SteamOS loads. "
+                  + "Game Mode has no setting for it. It's kept by the LED hardware and may be reset by system updates."
+        }
+
+        GridLayout {
+            columns: 3
+            columnSpacing: Kirigami.Units.largeSpacing
+
+            PlasmaComponents3.Label { text: "Boot colour" }
+            RowLayout {
+                Rectangle {
+                    implicitWidth: Kirigami.Units.gridUnit * 2
+                    implicitHeight: Kirigami.Units.gridUnit * 1.3
+                    radius: 3
+                    color: C.toQt(ed.bootColour)
+                    border.color: Kirigami.Theme.disabledTextColor
+                }
+                PlasmaComponents3.TextField {
+                    id: bootHex
+                    Layout.preferredWidth: Kirigami.Units.gridUnit * 6
+                    font.family: "monospace"
+                    validator: RegularExpressionValidator { regularExpression: /#?[0-9a-fA-F]{0,6}/ }
+                    onTextEdited: {
+                        const rgb = C.fromHex(text);
+                        if (rgb) {
+                            ed.bootColour = rgb;
+                        }
+                    }
+                    onEditingFinished: text = C.toHex(ed.bootColour)
+                }
+            }
+            PlasmaComponents3.Button {
+                text: "Use selected LED"
+                enabled: ed.selected.length > 0
+                onClicked: {
+                    ed.bootColour = ed.cols[ed.hwIndex(ed.selected[0])].slice();
+                    bootHex.text = C.toHex(ed.bootColour);
+                }
+            }
+
+            PlasmaComponents3.Label { text: "Boot brightness" }
+            PlasmaComponents3.Slider {
+                id: bootSlider
+                Layout.fillWidth: true
+                from: 0; to: 1; stepSize: 0.01
+                onMoved: ed.bootScale = C.brightnessToScale(value)
+            }
+            PlasmaComponents3.Label { text: Math.round(bootSlider.value * 100) + "%" }
+        }
+
+        RowLayout {
+            PlasmaComponents3.Button {
+                text: "Apply boot colour"
+                icon.name: "dialog-ok-apply"
+                enabled: !!ed.hw.startup && !(C.same(ed.bootColour, ed.hw.startup.colour) && ed.bootScale === ed.hw.startup.scale)
+                onClicked: ed.applyBoot()
+            }
+            PlasmaComponents3.Button {
+                text: "Restore original"
+                icon.name: "edit-undo"
+                visible: !!ed.originalBoot
+                enabled: !!ed.originalBoot && !!ed.hw.startup
+                         && !(C.same(ed.originalBoot.colour, ed.hw.startup.colour) && ed.originalBoot.scale === ed.hw.startup.scale)
+                onClicked: {
+                    ed.bootColour = ed.originalBoot.colour.slice();
+                    ed.bootScale = ed.originalBoot.scale;
+                    bootHex.text = C.toHex(ed.bootColour);
+                    bootSlider.value = C.scaleToBrightness(ed.bootScale);
+                    ed.applyBoot();
+                }
+                PlasmaComponents3.ToolTip.text: "Put back the boot colour the widget found when it first opened"
+                PlasmaComponents3.ToolTip.visible: hovered
+            }
         }
     }
 }
