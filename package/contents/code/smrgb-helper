@@ -4,10 +4,9 @@
 Reads and writes the Steam Machine's front LED strip via the kernel's valve-leds
 driver (/sys/class/leds/valve-leds[N]). Prints JSON on stdout. Standard library only.
 
-  smrgb-helper state - [tag]          print current strip state, the design saved for Game Mode
-                                     and the boot colour
-  smrgb-helper apply '<json>' [tag]  apply any of: colours, effect, enabled, scale, delay,
-                                     startup_colour, startup_scale; then print the new state
+  smrgb-helper state - [tag]          print current strip state and the design saved for Game Mode
+  smrgb-helper apply '<json>' [tag]  apply any of: colours, effect, enabled, scale, delay;
+                                     then print the new state
   smrgb-helper save '<json>' [tag]   save a design for Game Mode (closes Steam if it's running)
 
 JSON fields (colours are in hardware index order: index 0 = rightmost LED):
@@ -62,19 +61,6 @@ def state():
     }
 
 
-def startup():
-    leds = led_dirs()
-    if not leds:
-        return None
-    try:
-        return {
-            "colour": [int(v) for v in read(leds[0], "multi_intensity_startup").split()],
-            "scale": as_int(read(leds[0], "brightness_startup")),
-        }
-    except OSError:
-        return None
-
-
 def clamp(v, lo, hi):
     return max(lo, min(hi, int(v)))
 
@@ -104,13 +90,6 @@ def apply(changes):
     if "enabled" in changes:
         for p in leds:
             write(p, "enabled", 1 if changes["enabled"] else 0)
-    if "startup_colour" in changes:
-        c = changes["startup_colour"]
-        for p in leds:
-            write(p, "multi_intensity_startup", " ".join(str(clamp(v, 0, 255)) for v in c))
-    if "startup_scale" in changes:
-        for p in leds:
-            write(p, "brightness_startup", clamp(changes["startup_scale"], 0, 255))
     return state()
 
 
@@ -380,7 +359,6 @@ def main():
             out = state()
             if out.get("available"):
                 out["saved"] = saved_design()
-                out["startup"] = startup()
                 out["steamRunning"] = steam_running()
         elif cmd == "apply":
             out = apply(json.loads(sys.argv[2]))

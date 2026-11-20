@@ -18,7 +18,6 @@ Item {
         property int scale: 9
         property int delay: 16
         property var saved: null
-        property var startup: ({ colour: [1, 90, 255], scale: 56 })
         property bool steamRunning: true
         property bool saving: false
         property var lastSave: null

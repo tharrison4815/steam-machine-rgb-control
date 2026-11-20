@@ -20,8 +20,6 @@ Item {
 
     // The design Steam will restore (as hardware values), or {available: false, reason}
     property var saved: null
-    // Boot colour {colour: [r,g,b], scale}
-    property var startup: null
     property bool steamRunning: false
 
     property bool saving: false
@@ -50,7 +48,7 @@ Item {
         _run("state", "state", "-");
     }
 
-    // changes: any of {colours, effect, enabled, scale, delay, startup_colour, startup_scale}
+    // changes: any of {colours, effect, enabled, scale, delay}
     function apply(changes) {
         for (const k in changes) {
             _pending[k] = changes[k];
@@ -90,9 +88,6 @@ Item {
         hw.enabled = out.enabled;
         hw.scale = out.scale;
         hw.delay = out.delay;
-        if (out.startup !== undefined) {
-            hw.startup = out.startup;
-        }
         return true;
     }
 

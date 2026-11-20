@@ -3,8 +3,8 @@
 A KDE Plasma 6 widget for customising the Steam Machine's front LED strip from Desktop Mode, with
 the option to save your design so Game Mode uses it too.
 
-> Status: in development. All planned features are implemented; Save for Game Mode and the boot
-> colour still need testing on the device. Not yet packaged for the KDE Store.
+> Status: in development. All planned features are implemented and tested on the device.
+> Not yet packaged for the KDE Store.
 > This README is the working spec.
 
 ## Why
@@ -81,9 +81,14 @@ easy to share.
 - An **"Unsaved"** indicator appears when the live strip differs from the saved design, because
   Steam re-applies its saved LED settings whenever it starts (Desktop Mode too).
 
-### Advanced
-- Boot/startup colour and brightness (`multi_intensity_startup`, `brightness_startup`): not
-  available in Game Mode, and likely stored in firmware. Behind a warning.
+### Not included: boot colour
+- The strip's boot colour (`multi_intensity_startup`) is writable and the LED hardware keeps it
+  across reboots, but **Steam writes its default (`1 90 255`) back about 2 seconds after it starts**
+  (every login and every switch between Desktop and Game Mode), and Steam has no setting that stores
+  a boot colour. A one-off write therefore only lasts until Steam next starts. Making it stick would
+  need a background service that re-applies it after Steam starts, so it was left out.
+- Boot brightness (`brightness_startup`) is a real Steam setting ("Brightness During Startup" in
+  Game Mode), so it's left to Steam.
 
 ## Hardware reference
 

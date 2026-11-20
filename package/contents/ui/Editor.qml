@@ -18,6 +18,8 @@ ColumnLayout {
     Layout.minimumWidth: Kirigami.Units.gridUnit * 30
     Layout.minimumHeight: implicitHeight
     Layout.preferredHeight: implicitHeight
+    // Also cap it, so the popup shrinks again when sections are hidden
+    Layout.maximumHeight: implicitHeight
     spacing: Kirigami.Units.largeSpacing
 
     property var cols: []
@@ -58,12 +60,6 @@ ColumnLayout {
     property bool confirmingSave: false
     property var saveResult: null        // last save's result, shown until the next edit or save
 
-    // ---- Advanced: boot colour ----
-    property bool advancedOpen: false
-    property var bootColour: [1, 90, 255]
-    property int bootScale: 56
-    property var originalBoot: null      // first boot colour seen this session, for "Restore"
-
     readonly property var effects: [
         { text: "Solid", value: "manual" },
         { text: "Breathe", value: "breath" },
@@ -84,7 +80,6 @@ ColumnLayout {
         delay = hw.delay;
         undoStack = [];
         redoStack = [];
-        loadBoot();
         if (selected.length === 0 || selected.some(p => p >= n)) {
             selected = [];
             anchor = -1;
@@ -108,23 +103,6 @@ ColumnLayout {
         function onSaveFinished(result) {
             ed.saveResult = result;
         }
-    }
-
-    function loadBoot() {
-        if (hw.startup) {
-            bootColour = hw.startup.colour.slice();
-            bootScale = hw.startup.scale;
-            if (!originalBoot) {
-                originalBoot = { colour: bootColour.slice(), scale: bootScale };
-            }
-            bootHex.text = C.toHex(bootColour);
-            bootSlider.value = C.scaleToBrightness(bootScale);
-        }
-    }
-
-    function applyBoot() {
-        hw.apply({ startup_colour: bootColour, startup_scale: bootScale });
-        hw.startup = { colour: bootColour.slice(), scale: bootScale };
     }
 
     function syncControls() {
@@ -527,7 +505,7 @@ ColumnLayout {
             Layout.fillWidth: true
             PlasmaComponents3.Label {
                 Layout.fillWidth: true
-                text: ed.selected.length === 0 ? "Click an LED to select it. Shift-click selects a range, Ctrl-click adds or removes."
+                text: ed.selected.length === 0 ? "Click an LED to edit its colour. Shift-click selects a range, Ctrl-click adds or removes."
                                                : ed.selected.length + " of " + ed.n + " selected"
                 opacity: 0.7
                 wrapMode: Text.WordWrap
@@ -643,6 +621,7 @@ ColumnLayout {
     RowLayout {
         Layout.fillWidth: true
         enabled: ed.coloursEditable
+        visible: ed.selected.length > 0
 
         PlasmaComponents3.ToolButton {
             text: "Solid"
@@ -696,6 +675,7 @@ ColumnLayout {
         Layout.fillWidth: true
         spacing: Kirigami.Units.largeSpacing
         enabled: ed.coloursEditable
+        visible: ed.selected.length > 0
 
         ColourPicker {
             id: picker
@@ -885,7 +865,7 @@ ColumnLayout {
     Kirigami.InlineMessage {
         Layout.fillWidth: true
         type: Kirigami.MessageType.Warning
-        visible: ed.saveAvailable && ed.gmDiffCount > 0 && ed.effect !== "rainbow"
+        visible: ed.unsaved && ed.gmDiffCount > 0 && ed.effect !== "rainbow"
         text: (ed.gmDiffCount === 1 ? "1 LED uses a colour" : ed.gmDiffCount + " LEDs use colours")
               + " Game Mode can't show exactly (usually very light tints). Saving uses the nearest colour it can show."
         actions: [
@@ -950,97 +930,5 @@ ColumnLayout {
                 onTriggered: Qt.openUrlExternally("steam://open/main")
             }
         ]
-    }
-
-    // ================= Advanced =================
-    PlasmaComponents3.ToolButton {
-        text: "Advanced"
-        icon.name: ed.advancedOpen ? "arrow-down" : "arrow-right"
-        onClicked: ed.advancedOpen = !ed.advancedOpen
-        visible: ed.hw.startup !== null
-    }
-
-    ColumnLayout {
-        Layout.fillWidth: true
-        visible: ed.advancedOpen && ed.hw.startup !== null
-
-        Kirigami.InlineMessage {
-            Layout.fillWidth: true
-            visible: true
-            type: Kirigami.MessageType.Warning
-            text: "The boot colour is what the strip shows while the machine starts, before SteamOS loads. "
-                  + "Game Mode has no setting for it. It's kept by the LED hardware and may be reset by system updates."
-        }
-
-        GridLayout {
-            columns: 3
-            columnSpacing: Kirigami.Units.largeSpacing
-
-            PlasmaComponents3.Label { text: "Boot colour" }
-            RowLayout {
-                Rectangle {
-                    implicitWidth: Kirigami.Units.gridUnit * 2
-                    implicitHeight: Kirigami.Units.gridUnit * 1.3
-                    radius: 3
-                    color: C.toQt(ed.bootColour)
-                    border.color: Kirigami.Theme.disabledTextColor
-                }
-                PlasmaComponents3.TextField {
-                    id: bootHex
-                    Layout.preferredWidth: Kirigami.Units.gridUnit * 6
-                    font.family: "monospace"
-                    validator: RegularExpressionValidator { regularExpression: /#?[0-9a-fA-F]{0,6}/ }
-                    onTextEdited: {
-                        const rgb = C.fromHex(text);
-                        if (rgb) {
-                            ed.bootColour = rgb;
-                        }
-                    }
-                    onEditingFinished: text = C.toHex(ed.bootColour)
-                }
-            }
-            PlasmaComponents3.Button {
-                text: "Use selected LED"
-                enabled: ed.selected.length > 0
-                onClicked: {
-                    ed.bootColour = ed.cols[ed.hwIndex(ed.selected[0])].slice();
-                    bootHex.text = C.toHex(ed.bootColour);
-                }
-            }
-
-            PlasmaComponents3.Label { text: "Boot brightness" }
-            PlasmaComponents3.Slider {
-                id: bootSlider
-                Layout.fillWidth: true
-                from: 0; to: 1; stepSize: 0.01
-                onMoved: ed.bootScale = C.brightnessToScale(value)
-            }
-            PlasmaComponents3.Label { text: Math.round(bootSlider.value * 100) + "%" }
-        }
-
-        RowLayout {
-            PlasmaComponents3.Button {
-                text: "Apply boot colour"
-                icon.name: "dialog-ok-apply"
-                enabled: !!ed.hw.startup && !(C.same(ed.bootColour, ed.hw.startup.colour) && ed.bootScale === ed.hw.startup.scale)
-                onClicked: ed.applyBoot()
-            }
-            PlasmaComponents3.Button {
-                text: "Restore original"
-                icon.name: "edit-undo"
-                visible: !!ed.originalBoot
-                enabled: !!ed.originalBoot && !!ed.hw.startup
-                         && !(C.same(ed.originalBoot.colour, ed.hw.startup.colour) && ed.originalBoot.scale === ed.hw.startup.scale)
-                onClicked: {
-                    ed.bootColour = ed.originalBoot.colour.slice();
-                    ed.bootScale = ed.originalBoot.scale;
-                    bootHex.text = C.toHex(ed.bootColour);
-                    bootSlider.value = C.scaleToBrightness(ed.bootScale);
-                    ed.applyBoot();
-                }
-                PlasmaComponents3.ToolTip.text: "Put back the boot colour the widget found when it first opened"
-                PlasmaComponents3.ToolTip.visible: hovered
-            }
-        }
     }
 }
