@@ -13,8 +13,8 @@ Changes show on the strip immediately; **Save** makes them permanent (Desktop an
 ## Install
 
 - **From Discover or Plasma:** right-click the panel → *Add or Manage Widgets* → *Get New Widgets* →
-  *Download New Plasma Widgets*, and search for "Steam Machine RGB Control". (Once published on the
-  KDE Store, it also appears in Discover under *Plasma Addons*.)
+  *Download New Plasma Widgets*, and search for "Steam Machine RGB Control". It also appears in Discover
+  under *Plasma Addons*. Store page: https://www.opendesktop.org/p/2382283/
 - **From a file:** download the `.plasmoid` from the releases and run
   `kpackagetool6 -t Plasma/Applet -i steam-machine-rgb-control-<version>.plasmoid`, or use
   *Install Widget From Local File…* in the Get New Widgets dialog.

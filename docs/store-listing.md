@@ -2,6 +2,8 @@
 
 Text to paste into the KDE Store product form. Keep it in sync with each release.
 
+Published at https://www.opendesktop.org/p/2382283/ (version 1.0.0, 20 Nov 2026).
+
 ## Name
 
 Steam Machine RGB Control
