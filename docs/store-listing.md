@@ -68,4 +68,4 @@ First release.
 - **Source / homepage link:** https://github.com/tharrison4815/steam-machine-rgb-control
 - **File:** `dist/steam-machine-rgb-control-1.0.1.plasmoid` (build with `python3 tools/build-plasmoid.py`)
 - **Version:** 1.0.1
-- **Screenshots:** `docs/screenshots/editor.png` (main image), then `docs/screenshots/gradient.png`
+- **Screenshots** (in this order): `docs/screenshots/editor.png` (main image), `gradient.png`, `presets.png`, `effects.png`
