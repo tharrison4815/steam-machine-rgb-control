@@ -41,8 +41,8 @@ ColumnLayout {
     property var gradEnd: [0, 0, 0]
     property int gradTarget: 0          // 0 = editing start colour, 1 = end colour
 
-    property string shareError: ""
-    property string shareInfo: ""
+    // Brief "Copied"/"Pasted" feedback on the buttons themselves, so nothing changes height
+    property string shareFlash: ""
 
     readonly property int n: cols.length
     readonly property var current: mode === "gradient" ? (gradTarget === 0 ? gradStart : gradEnd)
@@ -51,13 +51,12 @@ ColumnLayout {
 
     // ---- Game Mode ----
     // What Game Mode would actually show for the current colours (it can't reproduce every level)
-    readonly property var gmCols: cols.map(c => c.map(C.toGameMode))
-    readonly property int gmDiffCount: cols.filter(c => !C.same(c, c.map(C.toGameMode))).length
+    // (The editor only produces such colours, but the strip may hold others set by other tools.)
+    readonly property var gmCols: C.snapAll(cols)
     readonly property bool saveAvailable: !!(hw.saved && hw.saved.available)
     readonly property bool unsaved: saveAvailable && n > 0 && !(
         sameCols(gmCols, hw.saved.colours) && effect === hw.saved.effect && scale === hw.saved.scale
         && (effect === "manual" || delay === hw.saved.delay) && hw.saved.enabled === 1)
-    property bool confirmingSave: false
     property var saveResult: null        // last save's result, shown until the next edit or save
 
     readonly property var effects: [
@@ -74,7 +73,8 @@ ColumnLayout {
     // ---- loading / syncing ----
 
     function load() {
-        cols = C.copy(hw.colours);
+        // Show what Game Mode would show; the strip itself is only rewritten on the next edit.
+        cols = C.snapAll(hw.colours);
         effect = hw.effect;
         scale = hw.scale;
         delay = hw.delay;
@@ -91,9 +91,32 @@ ColumnLayout {
         return !!a && !!b && a.length === b.length && a.every((c, i) => C.same(c, b[i]));
     }
 
+    // The Save button: if Steam is running it must close, so confirm first; otherwise just save.
+    property bool saveRequested: false
+    function requestSave() {
+        commitEdits();
+        saveResult = null;
+        saveRequested = true;
+        hw.checkSteam();
+    }
+
+    Connections {
+        target: ed.hw
+        function onSteamChecked() {
+            if (!ed.saveRequested) {
+                return;
+            }
+            ed.saveRequested = false;
+            if (ed.hw.steamRunning) {
+                saveDialog.open();
+            } else {
+                ed.startSave();
+            }
+        }
+    }
+
     function startSave() {
         commitEdits();
-        confirmingSave = false;
         saveResult = null;
         hw.save({ colours: cols, effect: effect, enabled: 1, scale: scale, delay: delay });
     }
@@ -102,6 +125,9 @@ ColumnLayout {
         target: ed.hw
         function onSaveFinished(result) {
             ed.saveResult = result;
+            if (!result.ok) {
+                errorDialog.open();
+            }
         }
     }
 
@@ -148,7 +174,10 @@ ColumnLayout {
             lastMergeTime = now;
             return;
         }
-        saveResult = null;
+        // Keep "Saved, reopen Steam" until Steam is reopened; anything else is stale after an edit
+        if (saveResult && !(saveResult.ok && saveResult.steamWasRunning)) {
+            saveResult = null;
+        }
         undoStack = undoStack.concat([snapshot()]).slice(-200);
         redoStack = [];
         lastMerge = mergeKey || "";
@@ -218,7 +247,7 @@ ColumnLayout {
         record(mergeKey);
         const c = C.copy(cols);
         for (const p of selected) {
-            c[hwIndex(p)] = [C.clamp(rgb[0]), C.clamp(rgb[1]), C.clamp(rgb[2])];
+            c[hwIndex(p)] = C.snap(rgb);
         }
         cols = c;
         hw.apply({ colours: cols });
@@ -238,14 +267,27 @@ ColumnLayout {
             return;                       // empty box while typing: wait for a number
         }
         const rgb = current.slice();
-        rgb[channel] = C.clamp(v);
+        rgb[channel] = C.toGameMode(C.clamp(v));
         if (rgb[channel] !== current[channel]) {
             setPanel(rgb, "type" + channel);
         }
     }
 
+    // Up/down arrows and mouse wheel: move to the next level Game Mode can show in that
+    // direction (e.g. 227 -> 255), otherwise snapping back would make the box look stuck.
+    function steppedChannel(channel, v, spin) {
+        const prev = current[channel];
+        const rgb = current.slice();
+        rgb[channel] = v > prev ? C.ceilGameMode(v) : v < prev ? C.floorGameMode(v) : C.toGameMode(v);
+        if (rgb[channel] !== prev) {
+            setPanel(rgb, "step" + channel);
+        }
+        spin.value = current[channel];
+    }
+
     // Colour from the picker / hex / RGB fields
     function setPanel(rgb, mergeKey) {
+        rgb = C.snap(rgb);
         if (mode === "gradient") {
             if (gradTarget === 0) {
                 gradStart = rgb.slice();
@@ -275,7 +317,7 @@ ColumnLayout {
         const m = selected.length;
         for (let k = 0; k < m; k++) {
             const t = m > 1 ? k / (m - 1) : 0;
-            c[hwIndex(selected[k])] = [0, 1, 2].map(j => Math.round(gradStart[j] + (gradEnd[j] - gradStart[j]) * t));
+            c[hwIndex(selected[k])] = C.snap([0, 1, 2].map(j => Math.round(gradStart[j] + (gradEnd[j] - gradStart[j]) * t)));
         }
         cols = c;
         hw.apply({ colours: cols });
@@ -294,7 +336,7 @@ ColumnLayout {
     // Replace all colours at once (presets, share codes)
     function applyColours(newCols) {
         record("");
-        cols = C.copy(newCols);
+        cols = C.snapAll(newCols);
         hw.apply({ colours: cols });
         resetGradientEnds();
     }
@@ -313,11 +355,11 @@ ColumnLayout {
     // Combined list: built-ins first, then the user's saved presets (stored as share codes).
     property var presetList: []
     function rebuildPresets() {
-        const list = Presets.builtins.map(p => ({ name: p.name, cols: p.cols, user: false }));
+        const list = Presets.builtins.map(p => ({ name: p.name, cols: C.snapAll(p.cols), user: false }));
         for (const u of userPresets()) {
             const d = Share.decode(u.code);
             if (d.cols) {
-                list.push({ name: u.name, cols: d.cols, user: true });
+                list.push({ name: u.name, cols: C.snapAll(d.cols), user: true });
             }
         }
         presetList = list;
@@ -367,8 +409,18 @@ ColumnLayout {
         clip.text = Share.encode(cols);
         clip.selectAll();
         clip.copy();
-        shareError = "";
-        shareInfo = "Copied: " + clip.text;
+        flash("copied");
+    }
+
+    function flash(what) {
+        shareFlash = what;
+        flashTimer.restart();
+    }
+
+    Timer {
+        id: flashTimer
+        interval: 2000
+        onTriggered: ed.shareFlash = ""
     }
 
     function pasteCode() {
@@ -376,13 +428,12 @@ ColumnLayout {
         clip.paste();
         const d = Share.decode(clip.text);
         if (d.error) {
-            shareError = d.error;
-            shareInfo = "";
+            pasteErrorDialog.subtitle = d.error;
+            pasteErrorDialog.open();
             return;
         }
-        shareError = "";
-        shareInfo = "Pasted colours from share code.";
         applyColours(d.cols);
+        flash("pasted");
     }
 
     onCurrentChanged: {
@@ -505,10 +556,9 @@ ColumnLayout {
             Layout.fillWidth: true
             PlasmaComponents3.Label {
                 Layout.fillWidth: true
-                text: ed.selected.length === 0 ? "Click an LED to edit its colour. Shift-click selects a range, Ctrl-click adds or removes."
-                                               : ed.selected.length + " of " + ed.n + " selected"
+                text: ed.selected.length === 0 ? "No LEDs selected" : ed.selected.length + " of " + ed.n + " selected"
                 opacity: 0.7
-                wrapMode: Text.WordWrap
+                elide: Text.ElideRight
                 font: Kirigami.Theme.smallFont
             }
             PlasmaComponents3.ToolButton {
@@ -537,13 +587,13 @@ ColumnLayout {
             onActivated: index => ed.applyColours(ed.presetList[index].cols)
         }
         PlasmaComponents3.ToolButton {
-            icon.name: "document-save"
+            icon.name: "list-add"
             onClicked: {
-                saveRow.visible = true;
                 nameField.text = ed.presetIndex >= 0 && ed.presetList[ed.presetIndex].user ? ed.presetList[ed.presetIndex].name : "";
+                presetDialog.open();
                 nameField.forceActiveFocus();
             }
-            PlasmaComponents3.ToolTip.text: "Save these colours as a preset"
+            PlasmaComponents3.ToolTip.text: "Add these colours to my presets"
             PlasmaComponents3.ToolTip.visible: hovered
         }
         PlasmaComponents3.ToolButton {
@@ -554,16 +604,16 @@ ColumnLayout {
             PlasmaComponents3.ToolTip.visible: hovered
         }
         PlasmaComponents3.ToolButton {
-            icon.name: "edit-copy"
-            text: "Copy code"
+            icon.name: ed.shareFlash === "copied" ? "dialog-ok-apply" : "edit-copy"
+            text: ed.shareFlash === "copied" ? "Copied" : "Copy code"
             enabled: ed.n > 0
             onClicked: ed.copyCode()
             PlasmaComponents3.ToolTip.text: "Copy a share code for these colours"
             PlasmaComponents3.ToolTip.visible: hovered
         }
         PlasmaComponents3.ToolButton {
-            icon.name: "edit-paste"
-            text: "Paste code"
+            icon.name: ed.shareFlash === "pasted" ? "dialog-ok-apply" : "edit-paste"
+            text: ed.shareFlash === "pasted" ? "Pasted" : "Paste code"
             enabled: ed.n > 0
             onClicked: ed.pasteCode()
             PlasmaComponents3.ToolTip.text: "Apply colours from a share code on the clipboard"
@@ -571,184 +621,246 @@ ColumnLayout {
         }
     }
 
-    RowLayout {
-        id: saveRow
-        Layout.fillWidth: true
-        visible: false
-        PlasmaComponents3.TextField {
-            id: nameField
-            Layout.fillWidth: true
-            placeholderText: "Preset name"
-            onAccepted: saveButton.clicked()
-        }
-        PlasmaComponents3.Button {
-            id: saveButton
-            text: "Save"
-            enabled: nameField.text.trim() !== ""
-            onClicked: {
-                ed.savePreset(nameField.text);
-                saveRow.visible = false;
+    // Dialogs open over the popup instead of adding rows to it (the popup grows away from the
+    // panel, so any height change would shift everything above it).
+    Kirigami.PromptDialog {
+        id: presetDialog
+        title: "Add to my presets"
+        standardButtons: Kirigami.Dialog.NoButton
+        customFooterActions: [
+            Kirigami.Action {
+                text: "Add"
+                icon.name: "list-add"
+                enabled: nameField.text.trim() !== ""
+                onTriggered: {
+                    ed.savePreset(nameField.text);
+                    presetDialog.close();
+                }
+            },
+            Kirigami.Action {
+                text: "Cancel"
+                icon.name: "dialog-cancel"
+                onTriggered: presetDialog.close()
             }
-        }
-        PlasmaComponents3.Button {
-            text: "Cancel"
-            onClicked: saveRow.visible = false
+        ]
+        ColumnLayout {
+            PlasmaComponents3.TextField {
+                id: nameField
+                Layout.fillWidth: true
+                placeholderText: "Preset name"
+                onAccepted: {
+                    if (text.trim() !== "") {
+                        ed.savePreset(text);
+                        presetDialog.close();
+                    }
+                }
+            }
+            PlasmaComponents3.Label {
+                Layout.fillWidth: true
+                wrapMode: Text.WordWrap
+                opacity: 0.7
+                text: "Using an existing name replaces that preset."
+            }
         }
     }
 
-    Kirigami.InlineMessage {
-        Layout.fillWidth: true
-        type: Kirigami.MessageType.Error
-        text: ed.shareError
-        visible: ed.shareError !== ""
-        showCloseButton: true
-        onVisibleChanged: if (!visible) ed.shareError = ""
-    }
-    PlasmaComponents3.Label {
-        Layout.fillWidth: true
-        visible: ed.shareInfo !== ""
-        text: ed.shareInfo
-        elide: Text.ElideRight
-        opacity: 0.7
-        font: Kirigami.Theme.smallFont
+    Kirigami.PromptDialog {
+        id: pasteErrorDialog
+        title: "Couldn't paste share code"
+        standardButtons: Kirigami.Dialog.Ok
     }
 
     Kirigami.Separator {
         Layout.fillWidth: true
     }
 
-    // ---- colour panel mode ----
-    RowLayout {
+    // ---- colour panel (with an overlay explaining why it's unavailable) ----
+    Item {
         Layout.fillWidth: true
-        enabled: ed.coloursEditable
-        visible: ed.selected.length > 0
+        implicitHeight: panelColumn.implicitHeight
 
-        PlasmaComponents3.ToolButton {
-            text: "Solid"
-            checkable: true
-            checked: ed.mode === "solid"
-            onClicked: { ed.commitEdits(); ed.mode = "solid"; }
+        ColumnLayout {
+            id: panelColumn
+            anchors.left: parent.left
+            anchors.right: parent.right
+            spacing: ed.spacing
+
+            // ---- colour panel mode ----
+            RowLayout {
+                Layout.fillWidth: true
+                enabled: ed.coloursEditable
+
+                PlasmaComponents3.ToolButton {
+                    text: "Solid"
+                    checkable: true
+                    checked: ed.mode === "solid"
+                    onClicked: { ed.commitEdits(); ed.mode = "solid"; }
+                }
+                PlasmaComponents3.ToolButton {
+                    text: "Gradient"
+                    checkable: true
+                    checked: ed.mode === "gradient"
+                    onClicked: { ed.commitEdits(); ed.mode = "gradient"; }
+                }
+
+                Item { Layout.fillWidth: true }
+
+                // Gradient end colours: click one to edit it with the picker
+                Repeater {
+                    model: ed.mode === "gradient" ? 2 : 0
+                    delegate: RowLayout {
+                        id: chip
+                        required property int index
+                        spacing: Kirigami.Units.smallSpacing
+                        PlasmaComponents3.Label { text: chip.index === 0 ? "Start" : "End" }
+                        Rectangle {
+                            objectName: "chip" + chip.index
+                            implicitWidth: Kirigami.Units.gridUnit * 2
+                            implicitHeight: Kirigami.Units.gridUnit * 1.3
+                            radius: 3
+                            color: C.toQt(chip.index === 0 ? ed.gradStart : ed.gradEnd)
+                            border.width: ed.gradTarget === chip.index ? 2 : 1
+                            border.color: ed.gradTarget === chip.index ? Kirigami.Theme.highlightColor : Kirigami.Theme.disabledTextColor
+                            MouseArea {
+                                anchors.fill: parent
+                                onClicked: { ed.commitEdits(); ed.gradTarget = chip.index; }
+                            }
+                        }
+                    }
+                }
+                PlasmaComponents3.ToolButton {
+                    visible: ed.mode === "gradient"
+                    icon.name: "exchange-positions"
+                    onClicked: { ed.commitEdits(); ed.swapGradient(); }
+                    PlasmaComponents3.ToolTip.text: "Swap start and end"
+                    PlasmaComponents3.ToolTip.visible: hovered
+                }
+            }
+
+            // ---- colour panel ----
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: Kirigami.Units.largeSpacing
+                enabled: ed.coloursEditable
+
+                ColourPicker {
+                    id: picker
+                    Layout.preferredWidth: Kirigami.Units.gridUnit * 12
+                    Layout.preferredHeight: Kirigami.Units.gridUnit * 9
+                    onPicked: rgb => ed.setPanel(rgb, "picker")
+                }
+
+                GridLayout {
+                    Layout.alignment: Qt.AlignTop
+                    columns: 2
+                    columnSpacing: Kirigami.Units.smallSpacing
+
+                    PlasmaComponents3.Label { text: "Hex" }
+                    PlasmaComponents3.TextField {
+                        id: hexField
+                        Layout.preferredWidth: Kirigami.Units.gridUnit * 6
+                        font.family: "monospace"
+                        validator: RegularExpressionValidator { regularExpression: /#?[0-9a-fA-F]{0,6}/ }
+                        // Apply as soon as six hex digits are typed
+                        onTextEdited: {
+                            const rgb = C.fromHex(text);
+                            if (rgb && !C.same(rgb, ed.current)) {
+                                ed.setPanel(rgb, "hex");
+                            }
+                        }
+                        onEditingFinished: {
+                            const rgb = C.fromHex(text);
+                            if (rgb) {
+                                ed.setPanel(rgb, "");
+                            }
+                            text = C.toHex(ed.current);
+                        }
+                    }
+
+                    PlasmaComponents3.Label { text: "Red" }
+                    PlasmaComponents3.SpinBox {
+                        id: rSpin
+                        objectName: "rSpin"
+                        from: 0; to: 255; editable: true
+                        Connections {
+                            target: rSpin.contentItem
+                            function onTextEdited() {
+                                ed.typedChannel(0, rSpin.contentItem.text);
+                            }
+                        }
+                        onValueModified: ed.steppedChannel(0, value, rSpin)
+                    }
+                    PlasmaComponents3.Label { text: "Green" }
+                    PlasmaComponents3.SpinBox {
+                        id: gSpin
+                        objectName: "gSpin"
+                        from: 0; to: 255; editable: true
+                        Connections {
+                            target: gSpin.contentItem
+                            function onTextEdited() {
+                                ed.typedChannel(1, gSpin.contentItem.text);
+                            }
+                        }
+                        onValueModified: ed.steppedChannel(1, value, gSpin)
+                    }
+                    PlasmaComponents3.Label { text: "Blue" }
+                    PlasmaComponents3.SpinBox {
+                        id: bSpin
+                        objectName: "bSpin"
+                        from: 0; to: 255; editable: true
+                        Connections {
+                            target: bSpin.contentItem
+                            function onTextEdited() {
+                                ed.typedChannel(2, bSpin.contentItem.text);
+                            }
+                        }
+                        onValueModified: ed.steppedChannel(2, value, bSpin)
+                    }
+                }
+            }
         }
-        PlasmaComponents3.ToolButton {
-            text: "Gradient"
-            checkable: true
-            checked: ed.mode === "gradient"
-            onClicked: { ed.commitEdits(); ed.mode = "gradient"; }
-        }
 
-        Item { Layout.fillWidth: true }
+        Rectangle {
+            anchors.fill: parent
+            visible: ed.effect === "rainbow" || ed.selected.length === 0
+            radius: Kirigami.Units.cornerRadius
+            color: Qt.rgba(Kirigami.Theme.backgroundColor.r, Kirigami.Theme.backgroundColor.g,
+                           Kirigami.Theme.backgroundColor.b, 0.8)
 
-        // Gradient end colours: click one to edit it with the picker
-        Repeater {
-            model: ed.mode === "gradient" ? 2 : 0
-            delegate: RowLayout {
-                id: chip
-                required property int index
+            // Swallow clicks so the greyed-out controls underneath can't be used
+            MouseArea {
+                anchors.fill: parent
+                hoverEnabled: true
+                onWheel: wheel => wheel.accepted = true
+            }
+
+            ColumnLayout {
+                anchors.centerIn: parent
+                width: parent.width - Kirigami.Units.gridUnit * 2
                 spacing: Kirigami.Units.smallSpacing
-                PlasmaComponents3.Label { text: chip.index === 0 ? "Start" : "End" }
-                Rectangle {
-                    objectName: "chip" + chip.index
-                    implicitWidth: Kirigami.Units.gridUnit * 2
-                    implicitHeight: Kirigami.Units.gridUnit * 1.3
-                    radius: 3
-                    color: C.toQt(chip.index === 0 ? ed.gradStart : ed.gradEnd)
-                    border.width: ed.gradTarget === chip.index ? 2 : 1
-                    border.color: ed.gradTarget === chip.index ? Kirigami.Theme.highlightColor : Kirigami.Theme.disabledTextColor
-                    MouseArea {
-                        anchors.fill: parent
-                        onClicked: { ed.commitEdits(); ed.gradTarget = chip.index; }
-                    }
-                }
-            }
-        }
-        PlasmaComponents3.ToolButton {
-            visible: ed.mode === "gradient"
-            icon.name: "exchange-positions"
-            onClicked: { ed.commitEdits(); ed.swapGradient(); }
-            PlasmaComponents3.ToolTip.text: "Swap start and end"
-            PlasmaComponents3.ToolTip.visible: hovered
-        }
-    }
 
-    // ---- colour panel ----
-    RowLayout {
-        Layout.fillWidth: true
-        spacing: Kirigami.Units.largeSpacing
-        enabled: ed.coloursEditable
-        visible: ed.selected.length > 0
-
-        ColourPicker {
-            id: picker
-            Layout.preferredWidth: Kirigami.Units.gridUnit * 12
-            Layout.preferredHeight: Kirigami.Units.gridUnit * 9
-            onPicked: rgb => ed.setPanel(rgb, "picker")
-        }
-
-        GridLayout {
-            Layout.alignment: Qt.AlignTop
-            columns: 2
-            columnSpacing: Kirigami.Units.smallSpacing
-
-            PlasmaComponents3.Label { text: "Hex" }
-            PlasmaComponents3.TextField {
-                id: hexField
-                Layout.preferredWidth: Kirigami.Units.gridUnit * 6
-                font.family: "monospace"
-                validator: RegularExpressionValidator { regularExpression: /#?[0-9a-fA-F]{0,6}/ }
-                // Apply as soon as six hex digits are typed
-                onTextEdited: {
-                    const rgb = C.fromHex(text);
-                    if (rgb && !C.same(rgb, ed.current)) {
-                        ed.setPanel(rgb, "hex");
-                    }
+                Kirigami.Icon {
+                    Layout.alignment: Qt.AlignHCenter
+                    implicitWidth: Kirigami.Units.iconSizes.large
+                    implicitHeight: Kirigami.Units.iconSizes.large
+                    source: ed.effect === "rainbow" ? "color-management" : "edit-select"
                 }
-                onEditingFinished: {
-                    const rgb = C.fromHex(text);
-                    if (rgb) {
-                        ed.setPanel(rgb, "");
-                    }
-                    text = C.toHex(ed.current);
+                Kirigami.Heading {
+                    Layout.fillWidth: true
+                    level: 3
+                    horizontalAlignment: Text.AlignHCenter
+                    wrapMode: Text.WordWrap
+                    text: ed.effect === "rainbow" ? "The Rainbow effect doesn't use your colours"
+                                                   : "Click an LED above to edit its colour"
                 }
-            }
-
-            PlasmaComponents3.Label { text: "Red" }
-            PlasmaComponents3.SpinBox {
-                id: rSpin
-                objectName: "rSpin"
-                from: 0; to: 255; editable: true
-                Connections {
-                    target: rSpin.contentItem
-                    function onTextEdited() {
-                        ed.typedChannel(0, rSpin.contentItem.text);
-                    }
+                PlasmaComponents3.Label {
+                    Layout.fillWidth: true
+                    horizontalAlignment: Text.AlignHCenter
+                    wrapMode: Text.WordWrap
+                    opacity: 0.8
+                    text: ed.effect === "rainbow" ? "Choose another effect to edit colours. Your colours are kept."
+                                                   : "Shift-click selects a range. Ctrl-click adds or removes LEDs."
                 }
-                onValueModified: ed.setPanel([value, ed.current[1], ed.current[2]], "r")
-            }
-            PlasmaComponents3.Label { text: "Green" }
-            PlasmaComponents3.SpinBox {
-                id: gSpin
-                objectName: "gSpin"
-                from: 0; to: 255; editable: true
-                Connections {
-                    target: gSpin.contentItem
-                    function onTextEdited() {
-                        ed.typedChannel(1, gSpin.contentItem.text);
-                    }
-                }
-                onValueModified: ed.setPanel([ed.current[0], value, ed.current[2]], "g")
-            }
-            PlasmaComponents3.Label { text: "Blue" }
-            PlasmaComponents3.SpinBox {
-                id: bSpin
-                objectName: "bSpin"
-                from: 0; to: 255; editable: true
-                Connections {
-                    target: bSpin.contentItem
-                    function onTextEdited() {
-                        ed.typedChannel(2, bSpin.contentItem.text);
-                    }
-                }
-                onValueModified: ed.setPanel([ed.current[0], ed.current[1], value], "b")
             }
         }
     }
@@ -831,104 +943,96 @@ ColumnLayout {
         Layout.fillWidth: true
     }
 
-    // ================= Save for Game Mode =================
+    // ================= Save (persist the design via Steam's settings) =================
+    // One fixed-height row: nothing here may change height while editing, because the popup
+    // grows away from the panel and would shift everything above it (e.g. the picker mid-drag).
     RowLayout {
         Layout.fillWidth: true
+        Layout.preferredHeight: Kirigami.Units.gridUnit * 2
 
-        Kirigami.Icon {
+        Item {
             implicitWidth: Kirigami.Units.iconSizes.small
             implicitHeight: Kirigami.Units.iconSizes.small
-            source: !ed.saveAvailable ? "dialog-information" : ed.unsaved ? "emblem-warning" : "emblem-ok-symbolic"
+            Kirigami.Icon {
+                anchors.fill: parent
+                visible: !ed.hw.saving
+                source: !ed.saveAvailable ? "dialog-information"
+                      : ed.saveResult && ed.saveResult.ok ? "emblem-ok-symbolic"
+                      : ed.unsaved ? "emblem-warning" : "emblem-ok-symbolic"
+            }
+            PlasmaComponents3.BusyIndicator {
+                anchors.fill: parent
+                visible: ed.hw.saving
+                running: ed.hw.saving
+            }
         }
         PlasmaComponents3.Label {
+            id: statusLabel
             Layout.fillWidth: true
-            wrapMode: Text.WordWrap
-            text: !ed.hw.saved ? "Checking Game Mode settings…"
+            maximumLineCount: 1
+            elide: Text.ElideRight
+            text: ed.hw.saving ? (ed.hw.steamRunning ? "Closing Steam and saving…" : "Saving…")
+                : !ed.hw.saved ? "Checking your saved design…"
                 : !ed.saveAvailable ? ed.hw.saved.reason
-                : ed.unsaved ? "<b>Unsaved.</b> Steam will put back its saved design the next time it starts (including at login)."
-                : "Game Mode uses this design."
+                : ed.saveResult && ed.saveResult.ok && ed.saveResult.steamWasRunning ? "Saved. Reopen Steam when you're ready."
+                : ed.unsaved ? "Not saved: these changes are temporary"
+                : "Saved"
+            PlasmaComponents3.ToolTip.text: ed.unsaved && !ed.hw.saving && !ed.saveResult
+                ? "Until you save, your saved design comes back when you restart, log in or switch modes."
+                : text
+            PlasmaComponents3.ToolTip.visible: statusHover.hovered && (statusLabel.truncated || ed.unsaved)
+            HoverHandler {
+                id: statusHover
+            }
         }
         PlasmaComponents3.Button {
-            text: "Save for Game Mode…"
-            icon.name: "document-save"
-            visible: ed.saveAvailable
-            enabled: !ed.hw.saving && !ed.confirmingSave
+            text: "Reopen Steam"
+            icon.name: "steam"
+            visible: !!(ed.saveResult && ed.saveResult.ok && ed.saveResult.steamWasRunning) && !ed.hw.saving
+            // Opens Steam through its normal desktop launcher, like the app menu does
             onClicked: {
-                ed.commitEdits();
+                Qt.openUrlExternally("steam://open/main");
                 ed.saveResult = null;
-                ed.confirmingSave = true;
-                ed.hw.refresh();          // up-to-date "is Steam running?"
             }
+        }
+        PlasmaComponents3.Button {
+            text: "Save"
+            icon.name: "document-save"
+            visible: ed.saveAvailable && !(ed.saveResult && ed.saveResult.ok && ed.saveResult.steamWasRunning)
+            enabled: ed.unsaved && !ed.hw.saving && !ed.saveRequested
+            highlighted: ed.unsaved
+            onClicked: ed.requestSave()
         }
     }
 
-    Kirigami.InlineMessage {
-        Layout.fillWidth: true
-        type: Kirigami.MessageType.Warning
-        visible: ed.unsaved && ed.gmDiffCount > 0 && ed.effect !== "rainbow"
-        text: (ed.gmDiffCount === 1 ? "1 LED uses a colour" : ed.gmDiffCount + " LEDs use colours")
-              + " Game Mode can't show exactly (usually very light tints). Saving uses the nearest colour it can show."
-        actions: [
+    // Confirmation in a dialog over the popup, not in the layout
+    Kirigami.PromptDialog {
+        id: saveDialog
+        title: "Save"
+        subtitle: "Saving needs to close Steam for a moment. Close any game first. You can reopen Steam afterwards."
+        standardButtons: Kirigami.Dialog.NoButton
+        customFooterActions: [
             Kirigami.Action {
-                text: "Preview Game Mode colours"
-                icon.name: "view-preview"
-                onTriggered: ed.applyColours(ed.gmCols)
-            }
-        ]
-    }
-
-    Kirigami.InlineMessage {
-        Layout.fillWidth: true
-        type: Kirigami.MessageType.Information
-        visible: ed.confirmingSave && !ed.hw.saving
-        text: ed.hw.steamRunning
-              ? "Steam has to close while saving, because it overwrites its settings when it exits. "
-                + "Saving will close Steam now (close any game first), save the design, and then you can reopen Steam."
-              : "Steam is closed, so the design will be saved straight away."
-        actions: [
-            Kirigami.Action {
-                text: ed.hw.steamRunning ? "Close Steam and save" : "Save"
+                text: "Close Steam and save"
                 icon.name: "document-save"
-                onTriggered: ed.startSave()
+                onTriggered: {
+                    saveDialog.close();
+                    ed.startSave();
+                }
             },
             Kirigami.Action {
                 text: "Cancel"
                 icon.name: "dialog-cancel"
-                onTriggered: ed.confirmingSave = false
+                onTriggered: saveDialog.close()
             }
         ]
     }
 
-    RowLayout {
-        visible: ed.hw.saving
-        PlasmaComponents3.BusyIndicator {
-            implicitWidth: Kirigami.Units.iconSizes.medium
-            implicitHeight: Kirigami.Units.iconSizes.medium
-            running: ed.hw.saving
-        }
-        PlasmaComponents3.Label {
-            text: ed.hw.steamRunning ? "Waiting for Steam to close, then saving…" : "Saving…"
-        }
-    }
-
-    Kirigami.InlineMessage {
-        Layout.fillWidth: true
-        visible: ed.saveResult !== null
-        type: ed.saveResult && ed.saveResult.ok ? Kirigami.MessageType.Positive : Kirigami.MessageType.Error
-        showCloseButton: true
-        onVisibleChanged: if (!visible) ed.saveResult = null
-        text: !ed.saveResult ? ""
-              : !ed.saveResult.ok ? ed.saveResult.error
-              : ed.saveResult.steamWasRunning ? "Saved. Steam is closed: reopen it when you're ready."
-              : "Saved. Game Mode will use this design."
-        actions: [
-            Kirigami.Action {
-                text: "Reopen Steam"
-                icon.name: "steam"
-                visible: !!(ed.saveResult && ed.saveResult.ok && ed.saveResult.steamWasRunning)
-                // Opens Steam through its normal desktop launcher, like the app menu does
-                onTriggered: Qt.openUrlExternally("steam://open/main")
-            }
-        ]
+    Kirigami.PromptDialog {
+        id: errorDialog
+        title: "Couldn't save"
+        subtitle: ed.saveResult && !ed.saveResult.ok ? ed.saveResult.error : ""
+        standardButtons: Kirigami.Dialog.Ok
+        onClosed: ed.saveResult = null
     }
 }

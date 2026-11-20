@@ -1,7 +1,7 @@
 # Steam Machine RGB Control
 
-A KDE Plasma 6 widget for customising the Steam Machine's front LED strip from Desktop Mode, with
-the option to save your design so Game Mode uses it too.
+A KDE Plasma 6 widget for customising the Steam Machine's front LED strip from Desktop Mode.
+Changes show on the strip immediately; **Save** makes them permanent (Desktop and Game Mode).
 
 > Status: in development. All planned features are implemented and tested on the device.
 > Not yet packaged for the KDE Store.
@@ -35,6 +35,11 @@ easy to share.
 - Undo / redo. Edits apply to the strip live.
 
 ### Colour panel (acts on the selection)
+- Every colour snaps to the nearest one Game Mode can reproduce (see *Game Mode storage*: channel
+  values 228–254 don't exist there). Steam re-applies its saved design whenever it starts, so
+  any other colour would only last until then. The Red/Green/Blue arrows step to the next
+  reachable value (227 → 255). Colours loaded from the strip, presets and pasted share codes are
+  snapped too.
 - Colour picker plus hex (`#rrggbb`) and R/G/B entry, all kept in sync.
 - **Solid**: set every selected LED to one colour.
 - **Gradient**: start and end colour (default: current colours at the ends of the selection),
@@ -47,7 +52,7 @@ easy to share.
   - Christmas zones
   - Warm white
   - Valve blue (default)
-- **My presets**: save the current design.
+- **My presets**: add the current design (the + button), delete with the bin button.
 - Shows "Custom" once you edit.
 
 ### Effect dropdown (independent of colours)
@@ -68,18 +73,21 @@ easy to share.
 - Copy / Paste buttons; a broken code shows an error and changes nothing.
 - Built-in presets and saved presets use the same format internally.
 
-### Save for Game Mode
-- Explains that Steam must be closed, refuses if a game is running, closes Steam, waits until it
+### Save
+- Edits are live but temporary: Steam re-applies its saved LED settings whenever it starts (every
+  login, restart and switch between Desktop and Game Mode). **Save** writes the design into those
+  settings, so it persists everywhere. The UI talks about "saved" vs "temporary" and only mentions
+  Steam where it has to (it is closed while saving).
+- The status line reads **Saved** or **Not saved: these changes are temporary**. The Save button is
+  highlighted only when there is something to save.
+- If Steam isn't running, Save saves straight away. Otherwise a dialog explains that Steam will
+  close for a moment; it refuses if a game is running, closes Steam, waits until it
   has fully exited and finished writing its config, then backs up, writes and verifies
   `localconfig.vdf`. Never starts Steam by itself: afterwards it offers a **Reopen Steam** button,
   which opens `steam://open/main` through the normal desktop launcher (like the app menu).
 - Backups are written next to the file as `localconfig.vdf.smrgb-backup-<timestamp>`; the newest 5
   are kept.
 - Sets Steam's "separate colours" option on when colours differ.
-- Converts colours to the nearest value Game Mode can reproduce, and warns when they'll look
-  different.
-- An **"Unsaved"** indicator appears when the live strip differs from the saved design, because
-  Steam re-applies its saved LED settings whenever it starts (Desktop Mode too).
 
 ### Not included: boot colour
 - The strip's boot colour (`multi_intensity_startup`) is writable and the LED hardware keeps it

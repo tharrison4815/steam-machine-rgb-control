@@ -40,7 +40,7 @@ Item {
             console.warn("after clicking End: gradStart", JSON.stringify(ed.gradStart), "gradEnd", JSON.stringify(ed.gradEnd), "target", ed.gradTarget, "spin text", r.contentItem.text);
             mouseClick(c0);
             console.warn("after clicking Start: spin value", r.value, "text", r.contentItem.text);
-            compare(ed.gradStart[0], 200);
+            compare(ed.gradStart[0], 199);   // 200 isn't reachable in Game Mode; nearest is 199
         }
     }
 }

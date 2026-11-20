@@ -23,6 +23,9 @@ Item {
         property var lastSave: null
         signal stateLoaded()
         signal saveFinished(var result)
+        signal steamChecked()
+        property int steamChecks: 0
+        function checkSteam() { steamChecks++; steamChecked(); }
         function apply(c) {}
         function refresh() {}
         function save(d) { lastSave = d; }
@@ -51,8 +54,32 @@ Item {
             }
         }
 
-        function test_candyCaneCreamDiffers() {
-            compare(ed.gmDiffCount, 6);    // the six 255,240,230 LEDs become 255,255,255 in Game Mode
+        // Everything the editor shows or sets is a colour Game Mode can reproduce.
+        function test_coloursSnapToGameMode() {
+            // Loaded from the strip: candy cane's cream 255,240,230 is shown as Game Mode shows it
+            compare(JSON.stringify(ed.cols[4]), JSON.stringify([255, 227, 227]));
+            compare(ed.presetList[ed.presetIndex].name, "Candy cane", "still recognised as the preset");
+            ed.selected = [0];
+            ed.mode = "solid";
+            ed.setPanel([255, 240, 240], "");
+            compare(JSON.stringify(ed.current), JSON.stringify([255, 227, 227]), "picked colour snapped");
+            // Arrow up from 227 jumps to the next reachable level instead of sticking
+            const r = findChild(ed, "gSpin");
+            ed.steppedChannel(1, 228, r);
+            compare(ed.current[1], 255, "step up");
+            ed.steppedChannel(1, 254, r);
+            compare(ed.current[1], 227, "step down");
+            compare(r.value, 227, "box shows the snapped value");
+            // Gradients only produce reachable values
+            ed.selected = [0, 1, 2, 3, 4, 5, 6, 7, 8];
+            ed.mode = "gradient";
+            ed.gradStart = [255, 255, 255];
+            ed.gradEnd = [0, 0, 0];
+            ed.applyGradient("");
+            verify(ed.cols.every(c => c.every(v => C.toGameMode(v) === v)), "gradient snapped");
+            ed.mode = "solid";
+            ed.applyColours(Presets.builtins[1].cols);
+            ed.selected = [];
         }
 
         function test_unsavedIndicator() {
@@ -64,6 +91,59 @@ Item {
             verify(ed.unsaved, "brightness differs");
             fakeHw.saved = { available: false, reason: "no settings" };
             verify(!ed.unsaved && !ed.saveAvailable, "nothing to compare with");
+        }
+
+        // The popup grows away from the panel, so any height change while editing shifts the
+        // picker under the mouse. The save area must keep the same height in every state.
+        function test_heightStableWhileEditing() {
+            ed.selected = [0, 1];
+            fakeHw.saved = { available: true, colours: ed.gmCols, effect: "manual", scale: 9, delay: 16, enabled: 1 };
+            wait(50);
+            const h0 = ed.implicitHeight;
+            fakeHw.saved = { available: true, colours: ed.gmCols, effect: "manual", scale: 12, delay: 16, enabled: 1 };
+            wait(50);
+            compare(ed.implicitHeight, h0, "unsaved");
+            ed.setPanel([255, 230, 230], "picker");
+            wait(50);
+            compare(ed.implicitHeight, h0, "after an edit");
+            fakeHw.saving = true;
+            wait(50);
+            compare(ed.implicitHeight, h0, "saving");
+            fakeHw.saving = false;
+            ed.saveResult = { ok: true, steamWasRunning: true };
+            wait(50);
+            compare(ed.implicitHeight, h0, "saved, Steam closed");
+            ed.setPanel([255, 0, 0], "picker");
+            verify(ed.saveResult !== null, "Reopen Steam survives an edit");
+            ed.saveResult = null;
+            ed.selected = [];
+            wait(50);
+            compare(ed.implicitHeight, h0, "nothing selected");
+            ed.flash("copied");
+            wait(50);
+            compare(ed.implicitHeight, h0, "copied feedback");
+        }
+
+        function test_saveButtonFlow() {
+            const refreshesBefore = fakeHw.steamChecks;
+            ed.undoStack = [{ cols: ed.cols, effect: "manual", scale: 9, delay: 16 }];
+            fakeHw.saved = { available: true, colours: ed.gmCols, effect: "manual", scale: 12, delay: 16, enabled: 1 };
+            // Steam closed: no dialog, saves straight away
+            fakeHw.steamRunning = false;
+            fakeHw.lastSave = null;
+            ed.requestSave();
+            verify(fakeHw.lastSave !== null, "saved without asking");
+            compare(fakeHw.steamChecks, refreshesBefore + 1, "asked the helper about Steam");
+            compare(ed.undoStack.length, 1, "undo history kept");
+            // Steam running: ask first, don't save yet
+            fakeHw.steamRunning = true;
+            fakeHw.lastSave = null;
+            ed.requestSave();
+            verify(fakeHw.lastSave === null, "not saved before confirming");
+            const dlg = ed.data.find(d => d && d.title === "Save");
+            verify(dlg && dlg.visible, "confirmation shown");
+            dlg.close();
+            wait(300);
         }
 
         function test_saveSendsDesign() {

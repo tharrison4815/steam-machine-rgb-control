@@ -97,3 +97,33 @@ function toGameMode(level) {
     }
     return best;
 }
+
+// Smallest reachable level >= v, and largest <= v (for the up/down arrows)
+function ceilGameMode(v) {
+    for (const r of reachable) {
+        if (r >= v) {
+            return r;
+        }
+    }
+    return 255;
+}
+
+function floorGameMode(v) {
+    let best = 0;
+    for (const r of reachable) {
+        if (r <= v) {
+            best = r;
+        }
+    }
+    return best;
+}
+
+// The widget only ever uses colours Game Mode can reproduce, so the strip looks the same
+// before and after Steam re-applies a saved design.
+function snap(rgb) {
+    return [toGameMode(clamp(rgb[0])), toGameMode(clamp(rgb[1])), toGameMode(clamp(rgb[2]))];
+}
+
+function snapAll(cols) {
+    return cols.map(snap);
+}

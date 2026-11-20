@@ -26,6 +26,7 @@ Item {
 
     signal stateLoaded()
     signal saveFinished(var result)      // {ok, error?, steamWasRunning?}
+    signal steamChecked()
 
     readonly property string helperPath: Qt.resolvedUrl("../code/smrgb-helper").toString().replace(/^file:\/\//, "")
 
@@ -54,6 +55,11 @@ Item {
             _pending[k] = changes[k];
         }
         flushTimer.restart();
+    }
+
+    // Updates steamRunning without reloading anything else, then emits steamChecked
+    function checkSteam() {
+        _run("steam", "steam", "-");
     }
 
     // design: {colours, effect, enabled, scale, delay}. Closes Steam if it's running.
@@ -106,6 +112,11 @@ Item {
             const kind = hw._kinds[out.tag] || "apply";
             delete hw._kinds[out.tag];
 
+            if (kind === "steam") {
+                hw.steamRunning = !!(out.ok && out.steamRunning);
+                hw.steamChecked();
+                return;
+            }
             if (kind === "save") {
                 hw.saving = false;
                 if (out.ok) {

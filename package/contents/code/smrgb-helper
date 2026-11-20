@@ -8,6 +8,7 @@ driver (/sys/class/leds/valve-leds[N]). Prints JSON on stdout. Standard library 
   smrgb-helper apply '<json>' [tag]  apply any of: colours, effect, enabled, scale, delay;
                                      then print the new state
   smrgb-helper save '<json>' [tag]   save a design for Game Mode (closes Steam if it's running)
+  smrgb-helper steam - [tag]         report whether Steam / a game is running
 
 JSON fields (colours are in hardware index order: index 0 = rightmost LED):
   {"colours": [[r,g,b] x17], "effect": "manual", "enabled": 1, "scale": 9, "delay": 10}
@@ -364,6 +365,8 @@ def main():
             out = apply(json.loads(sys.argv[2]))
         elif cmd == "save":
             out = save(json.loads(sys.argv[2]))
+        elif cmd == "steam":
+            out = {"steamRunning": steam_running(), "gameRunning": game_running()}
         else:
             raise ValueError(f"unknown command {cmd!r}")
         out["ok"] = True
