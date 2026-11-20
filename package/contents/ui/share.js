@@ -1,4 +1,6 @@
 .pragma library
+// SPDX-FileCopyrightText: 2026 Tom Harrison
+// SPDX-License-Identifier: GPL-2.0-or-later
 
 // Share codes: "SMLED1:" + base64url(version byte, 17 x RGB in hardware order, CRC-8).
 // Colours only. Built-in and saved presets use the same format.

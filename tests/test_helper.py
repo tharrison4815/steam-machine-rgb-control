@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Tom Harrison
+# SPDX-License-Identifier: GPL-2.0-or-later
 """Tests for the Game Mode parts of smrgb-helper. Never touches Steam or the real config:
 Steam detection/closing is stubbed and the helper is pointed at temporary copies.
 

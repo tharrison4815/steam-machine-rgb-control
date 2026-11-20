@@ -149,3 +149,11 @@ Measured on the device; details and raw data live in the author's notes.
     sysfs, and handles the Save-for-Game-Mode flow, called through Plasma5Support's executable
     data source.
 - No background service; the widget only acts while you use it.
+
+## Licence
+
+Steam Machine RGB Control is free software, licensed under the
+[GNU General Public License v2.0 or later](LICENSE) (`GPL-2.0-or-later`).
+
+In plain words: you may use, study, change and share it. If you share a changed version, it must
+stay under the same licence and include its source code. It comes with no warranty.

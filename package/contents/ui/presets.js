@@ -1,4 +1,6 @@
 .pragma library
+// SPDX-FileCopyrightText: 2026 Tom Harrison
+// SPDX-License-Identifier: GPL-2.0-or-later
 
 // Built-in colour presets, hardware order (index 0 = rightmost LED).
 

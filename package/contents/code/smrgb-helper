@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Tom Harrison
+# SPDX-License-Identifier: GPL-2.0-or-later
 """Steam Machine RGB Control - hardware helper.
 
 Reads and writes the Steam Machine's front LED strip via the kernel's valve-leds

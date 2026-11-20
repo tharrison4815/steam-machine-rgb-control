@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Tom Harrison
+// SPDX-License-Identifier: GPL-2.0-or-later
+
 import QtQuick
 
 // Blended preview of how the strip actually looks (see README "Preview model"):

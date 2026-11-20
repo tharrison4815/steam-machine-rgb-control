@@ -1,3 +1,6 @@
+// SPDX-FileCopyrightText: 2026 Tom Harrison
+// SPDX-License-Identifier: GPL-2.0-or-later
+
 import QtQuick
 import org.kde.plasma.plasma5support as P5Support
 
