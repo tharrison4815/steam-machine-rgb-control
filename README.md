@@ -3,9 +3,28 @@
 A KDE Plasma 6 widget for customising the Steam Machine's front LED strip from Desktop Mode.
 Changes show on the strip immediately; **Save** makes them permanent (Desktop and Game Mode).
 
-> Status: in development. All planned features are implemented and tested on the device.
-> Not yet packaged for the KDE Store.
-> This README is the working spec.
+> Status: version 1.0.0. This README is also the working spec.
+
+## Install
+
+- **From Discover or Plasma:** right-click the panel → *Add or Manage Widgets* → *Get New Widgets* →
+  *Download New Plasma Widgets*, and search for "Steam Machine RGB Control". (Once published on the
+  KDE Store, it also appears in Discover under *Plasma Addons*.)
+- **From a file:** download the `.plasmoid` from the releases and run
+  `kpackagetool6 -t Plasma/Applet -i steam-machine-rgb-control-<version>.plasmoid`, or use
+  *Install Widget From Local File…* in the Get New Widgets dialog.
+
+Then add **Steam Machine RGB Control** to your panel or desktop.
+
+## Building and testing
+
+    python3 tools/build-plasmoid.py                      # -> dist/steam-machine-rgb-control-<version>.plasmoid
+    kpackagetool6 -t Plasma/Applet -u package/            # update an existing dev install
+    systemctl --user restart plasma-plasmashell.service   # Plasma caches widget code until restarted
+    python3 -I tests/test_helper.py                       # helper / save logic
+    /usr/lib/qt6/bin/qmltestrunner -input tests/          # editor logic
+
+The version lives in `package/metadata.json`. Store page text: [docs/store-listing.md](docs/store-listing.md).
 
 ## Why
 
@@ -141,13 +160,13 @@ Measured on the device; details and raw data live in the author's notes.
 - Never edit `localconfig.vdf` while Steam is running: Steam rewrites it on exit.
 - Don't launch Steam from scripts; let the user reopen it.
 
-## Planned architecture
+## Architecture
 
 - **Plasma 6 plasmoid (QML):**
   - `contents/ui/`: the editor UI, preview rendering and share-code handling.
-  - `contents/code/steam-machine-rgb-helper` (Python 3, standard library only): reads and writes
-    sysfs, and handles the Save-for-Game-Mode flow, called through Plasma5Support's executable
-    data source.
+  - `contents/code/smrgb-helper` (Python 3, standard library only): reads and writes sysfs, and
+    handles saving to Steam's settings, called through Plasma5Support's executable data source.
+- Widget ID: `io.github.tharrison4815.steammachinergb` (permanent; never change it).
 - No background service; the widget only acts while you use it.
 
 ## Licence

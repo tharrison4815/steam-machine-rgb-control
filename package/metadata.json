@@ -3,16 +3,18 @@
     "KPlugin": {
         "Authors": [
             {
-                "Name": "Steam Machine RGB Control contributors"
+                "Name": "Tom Harrison"
             }
         ],
-        "Category": "System Information",
-        "Description": "Customise the Steam Machine's front LED strip from Desktop Mode",
+        "BugReportUrl": "https://github.com/tharrison4815/steam-machine-rgb-control/issues",
+        "Category": "Utilities",
+        "Description": "Customise the Steam Machine's front LED strip: per-LED colours, gradients, effects, presets and share codes",
         "Icon": "color-management",
-        "Id": "io.github.smrgbcontrol",
+        "Id": "io.github.tharrison4815.steammachinergb",
         "License": "GPL-2.0-or-later",
         "Name": "Steam Machine RGB Control",
-        "Version": "0.1.0"
+        "Version": "1.0.0",
+        "Website": "https://github.com/tharrison4815/steam-machine-rgb-control"
     },
     "X-Plasma-API-Minimum-Version": "6.0"
 }
