@@ -1,0 +1,18 @@
+{
+    "KPackageStructure": "Plasma/Applet",
+    "KPlugin": {
+        "Authors": [
+            {
+                "Name": "Steam Machine RGB Control contributors"
+            }
+        ],
+        "Category": "System Information",
+        "Description": "Customise the Steam Machine's front LED strip from Desktop Mode",
+        "Icon": "color-management",
+        "Id": "io.github.smrgbcontrol",
+        "License": "GPL-2.0-or-later",
+        "Name": "Steam Machine RGB Control",
+        "Version": "0.1.0"
+    },
+    "X-Plasma-API-Minimum-Version": "6.0"
+}

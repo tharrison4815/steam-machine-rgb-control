@@ -1,0 +1,110 @@
+#!/usr/bin/env python3
+"""Steam Machine RGB Control - hardware helper.
+
+Reads and writes the Steam Machine's front LED strip via the kernel's valve-leds
+driver (/sys/class/leds/valve-leds[N]). Prints JSON on stdout. Standard library only.
+
+  smrgb-helper state                 print current strip state
+  smrgb-helper apply '<json>' [tag]  apply any of: colours, effect, enabled, scale, delay
+                                     then print the new state
+
+JSON fields (colours are in hardware index order: index 0 = rightmost LED):
+  {"colours": [[r,g,b] x17], "effect": "manual", "enabled": 1, "scale": 9, "delay": 10}
+"""
+import glob, json, os, re, sys
+
+BASE = "/sys/class/leds"
+EFFECTS = ("manual", "breath", "patrol", "rainbow")
+
+
+def led_dirs():
+    found = []
+    for path in glob.glob(os.path.join(BASE, "valve-leds[[]*[]]")):
+        m = re.search(r"\[(\d+)\]$", path)
+        if m:
+            found.append((int(m.group(1)), path))
+    return [p for _, p in sorted(found)]
+
+
+def read(path, attr):
+    with open(os.path.join(path, attr)) as f:
+        return f.read().strip()
+
+
+def write(path, attr, value):
+    with open(os.path.join(path, attr), "w") as f:
+        f.write(str(value))
+
+
+def as_int(text):
+    return int(text, 0)  # sysfs mixes "9" and "0x09"
+
+
+def state():
+    leds = led_dirs()
+    if not leds:
+        return {"available": False, "error": "No valve-leds devices found. Is this a Steam Machine?"}
+    first = leds[0]
+    return {
+        "available": True,
+        "count": len(leds),
+        "writable": os.access(os.path.join(first, "multi_intensity"), os.W_OK),
+        "colours": [[int(v) for v in read(p, "multi_intensity").split()] for p in leds],
+        "effect": read(first, "effect"),
+        "enabled": as_int(read(first, "enabled")),
+        "scale": as_int(read(first, "brightness_scale")),
+        "delay": as_int(read(first, "delay")),
+    }
+
+
+def clamp(v, lo, hi):
+    return max(lo, min(hi, int(v)))
+
+
+def apply(changes):
+    leds = led_dirs()
+    if not leds:
+        return state()
+    # Order matters a little: set levels before colours, effect last.
+    if "scale" in changes:
+        for p in leds:
+            write(p, "brightness_scale", clamp(changes["scale"], 0, 255))
+    if "delay" in changes:
+        for p in leds:
+            write(p, "delay", clamp(changes["delay"], 0, 20))
+    if "colours" in changes:
+        cols = changes["colours"]
+        if len(cols) != len(leds):
+            raise ValueError(f"expected {len(leds)} colours, got {len(cols)}")
+        for p, c in zip(leds, cols):
+            write(p, "multi_intensity", " ".join(str(clamp(v, 0, 255)) for v in c))
+    if "effect" in changes:
+        if changes["effect"] not in EFFECTS:
+            raise ValueError(f"unknown effect {changes['effect']!r}")
+        for p in leds:
+            write(p, "effect", changes["effect"])
+    if "enabled" in changes:
+        for p in leds:
+            write(p, "enabled", 1 if changes["enabled"] else 0)
+    return state()
+
+
+def main():
+    try:
+        cmd = sys.argv[1] if len(sys.argv) > 1 else "state"
+        if cmd == "state":
+            out = state()
+        elif cmd == "apply":
+            out = apply(json.loads(sys.argv[2]))
+        else:
+            raise ValueError(f"unknown command {cmd!r}")
+        out["ok"] = True
+    except Exception as e:  # report errors as JSON so the UI can show them
+        out = {"ok": False, "error": f"{type(e).__name__}: {e}"}
+    if len(sys.argv) > 3:
+        out["tag"] = sys.argv[3]
+    print(json.dumps(out))
+
+
+if __name__ == "__main__":
+    main()
