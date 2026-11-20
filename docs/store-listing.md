@@ -50,7 +50,14 @@ because Steam resets it every time it starts.
 
 Source code, bug reports and suggestions: https://github.com/tharrison4815/steam-machine-rgb-control
 
-## Changelog for 1.0.0
+## Changelog
+
+**1.0.1**
+
+- The widget now adds itself to the system tray when installed, so there's no need to add it by hand.
+- New compact layout that fits the system tray: the colour picker, presets and effects are now on tabs.
+
+**1.0.0**
 
 First release.
 
@@ -59,6 +66,6 @@ First release.
 - **Category:** Plasma 6 Applets (Desktop Extensions › KDE Plasma Extensions › Plasma 6 Extensions › Plasma 6 Applets)
 - **Licence:** GPL-2.0-or-later (GPLv2+)
 - **Source / homepage link:** https://github.com/tharrison4815/steam-machine-rgb-control
-- **File:** `dist/steam-machine-rgb-control-1.0.0.plasmoid` (build with `python3 tools/build-plasmoid.py`)
-- **Version:** 1.0.0
+- **File:** `dist/steam-machine-rgb-control-1.0.1.plasmoid` (build with `python3 tools/build-plasmoid.py`)
+- **Version:** 1.0.1
 - **Screenshots:** `docs/screenshots/editor.png` (main image), then `docs/screenshots/gradient.png`

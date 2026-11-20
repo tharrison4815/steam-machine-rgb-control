@@ -17,13 +17,14 @@ ColumnLayout {
 
     required property var hw
 
-    Layout.preferredWidth: Kirigami.Units.gridUnit * 32
-    Layout.minimumWidth: Kirigami.Units.gridUnit * 30
+    // The system tray gives every popup 24 x 24 grid units; elsewhere the popup uses these sizes.
+    Layout.preferredWidth: Kirigami.Units.gridUnit * 24
+    Layout.minimumWidth: Kirigami.Units.gridUnit * 20
     Layout.minimumHeight: implicitHeight
     Layout.preferredHeight: implicitHeight
     // Also cap it, so the popup shrinks again when sections are hidden
     Layout.maximumHeight: implicitHeight
-    spacing: Kirigami.Units.largeSpacing
+    spacing: Kirigami.Units.smallSpacing
 
     property var cols: []
     property string effect: "manual"
@@ -465,6 +466,8 @@ ColumnLayout {
     }
 
     // ================= UI =================
+    // Sized for the system tray, whose popup is a fixed 24 x 24 grid units (title bar included):
+    // the strip, selection and Save stay visible, and the rest is split into tabs.
 
     Kirigami.InlineMessage {
         Layout.fillWidth: true
@@ -478,30 +481,6 @@ ColumnLayout {
         type: Kirigami.MessageType.Warning
         text: "The LED files aren't writable by your user, so changes can't be applied."
         visible: ed.hw.loaded && ed.hw.available && !ed.hw.writable
-    }
-
-    // ---- header: title + undo/redo ----
-    RowLayout {
-        Layout.fillWidth: true
-        Kirigami.Heading {
-            Layout.fillWidth: true
-            level: 3
-            text: "Front LED strip"
-        }
-        PlasmaComponents3.ToolButton {
-            icon.name: "edit-undo"
-            enabled: ed.undoStack.length > 0
-            onClicked: { ed.commitEdits(); ed.undo(); }
-            PlasmaComponents3.ToolTip.text: "Undo"
-            PlasmaComponents3.ToolTip.visible: hovered
-        }
-        PlasmaComponents3.ToolButton {
-            icon.name: "edit-redo"
-            enabled: ed.redoStack.length > 0
-            onClicked: { ed.commitEdits(); ed.redo(); }
-            PlasmaComponents3.ToolTip.text: "Redo"
-            PlasmaComponents3.ToolTip.visible: hovered
-        }
     }
 
     // ---- swatches ----
@@ -524,7 +503,7 @@ ColumnLayout {
 
                     Rectangle {
                         Layout.fillWidth: true
-                        Layout.preferredHeight: Kirigami.Units.gridUnit * 2.2
+                        Layout.preferredHeight: Kirigami.Units.gridUnit * 1.6
                         radius: 3
                         color: C.toQt(ed.cols[ed.hwIndex(cell.index)] || [0, 0, 0])
                         opacity: ed.effect === "rainbow" ? 0.4 : 1
@@ -549,14 +528,16 @@ ColumnLayout {
 
         Preview {
             Layout.fillWidth: true
-            Layout.preferredHeight: Kirigami.Units.gridUnit * 1.2
+            Layout.preferredHeight: Kirigami.Units.gridUnit
             cols: ed.cols
             scale: ed.scale
             rainbow: ed.effect === "rainbow"
         }
 
+        // ---- selection + undo/redo ----
         RowLayout {
             Layout.fillWidth: true
+            spacing: 0
             PlasmaComponents3.Label {
                 Layout.fillWidth: true
                 text: ed.selected.length === 0 ? "No LEDs selected" : ed.selected.length + " of " + ed.n + " selected"
@@ -573,59 +554,389 @@ ColumnLayout {
                 enabled: ed.selected.length > 0
                 onClicked: { ed.commitEdits(); ed.selected = []; }
             }
-        }
-    }
-
-    // ---- colours dropdown, saving, share codes ----
-    RowLayout {
-        Layout.fillWidth: true
-
-        PlasmaComponents3.Label { text: "Colours" }
-        PlasmaComponents3.ComboBox {
-            id: presetBox
-            Layout.fillWidth: true
-            model: ed.presetList.map(p => p.user ? p.name + "  (mine)" : p.name)
-            currentIndex: ed.presetIndex
-            displayText: ed.presetIndex >= 0 ? ed.presetList[ed.presetIndex].name : "Custom"
-            onActivated: index => ed.applyColours(ed.presetList[index].cols)
-        }
-        PlasmaComponents3.ToolButton {
-            icon.name: "list-add"
-            onClicked: {
-                nameField.text = ed.presetIndex >= 0 && ed.presetList[ed.presetIndex].user ? ed.presetList[ed.presetIndex].name : "";
-                presetDialog.open();
-                nameField.forceActiveFocus();
+            Kirigami.Separator {
+                Layout.fillHeight: true
+                Layout.margins: Kirigami.Units.smallSpacing
             }
-            PlasmaComponents3.ToolTip.text: "Add these colours to my presets"
-            PlasmaComponents3.ToolTip.visible: hovered
-        }
-        PlasmaComponents3.ToolButton {
-            icon.name: "edit-delete"
-            visible: ed.presetIndex >= 0 && ed.presetList[ed.presetIndex].user
-            onClicked: ed.deletePreset(ed.presetList[ed.presetIndex].name)
-            PlasmaComponents3.ToolTip.text: "Delete this saved preset"
-            PlasmaComponents3.ToolTip.visible: hovered
-        }
-        PlasmaComponents3.ToolButton {
-            icon.name: ed.shareFlash === "copied" ? "dialog-ok-apply" : "edit-copy"
-            text: ed.shareFlash === "copied" ? "Copied" : "Copy code"
-            enabled: ed.n > 0
-            onClicked: ed.copyCode()
-            PlasmaComponents3.ToolTip.text: "Copy a share code for these colours"
-            PlasmaComponents3.ToolTip.visible: hovered
-        }
-        PlasmaComponents3.ToolButton {
-            icon.name: ed.shareFlash === "pasted" ? "dialog-ok-apply" : "edit-paste"
-            text: ed.shareFlash === "pasted" ? "Pasted" : "Paste code"
-            enabled: ed.n > 0
-            onClicked: ed.pasteCode()
-            PlasmaComponents3.ToolTip.text: "Apply colours from a share code on the clipboard"
-            PlasmaComponents3.ToolTip.visible: hovered
+            PlasmaComponents3.ToolButton {
+                icon.name: "edit-undo"
+                enabled: ed.undoStack.length > 0
+                onClicked: { ed.commitEdits(); ed.undo(); }
+                PlasmaComponents3.ToolTip.text: "Undo"
+                PlasmaComponents3.ToolTip.visible: hovered
+            }
+            PlasmaComponents3.ToolButton {
+                icon.name: "edit-redo"
+                enabled: ed.redoStack.length > 0
+                onClicked: { ed.commitEdits(); ed.redo(); }
+                PlasmaComponents3.ToolTip.text: "Redo"
+                PlasmaComponents3.ToolTip.visible: hovered
+            }
         }
     }
 
-    // Dialogs open over the popup instead of adding rows to it (the popup grows away from the
-    // panel, so any height change would shift everything above it).
+    // ---- tabs ----
+    PlasmaComponents3.TabBar {
+        id: tabs
+        objectName: "tabs"
+        Layout.fillWidth: true
+        PlasmaComponents3.TabButton {
+            text: "Colour"
+            icon.name: "color-picker"
+            onClicked: ed.commitEdits()
+        }
+        PlasmaComponents3.TabButton {
+            text: "Presets"
+            icon.name: "bookmarks"
+            onClicked: ed.commitEdits()
+        }
+        PlasmaComponents3.TabButton {
+            text: "Effect"
+            icon.name: "games-config-theme"
+            onClicked: ed.commitEdits()
+        }
+    }
+
+    // A StackLayout is as tall as its tallest page, so switching tabs never changes the height.
+    StackLayout {
+        Layout.fillWidth: true
+        Layout.fillHeight: true
+        currentIndex: tabs.currentIndex
+
+        // ======== Colour ========
+        Item {
+            implicitHeight: panelColumn.implicitHeight
+
+            ColumnLayout {
+                id: panelColumn
+                anchors.fill: parent
+                spacing: Kirigami.Units.smallSpacing
+
+                // ---- solid / gradient ----
+                RowLayout {
+                    Layout.fillWidth: true
+                    enabled: ed.coloursEditable
+                    spacing: Kirigami.Units.smallSpacing
+
+                    PlasmaComponents3.ToolButton {
+                        text: "Solid"
+                        checkable: true
+                        checked: ed.mode === "solid"
+                        onClicked: { ed.commitEdits(); ed.mode = "solid"; }
+                    }
+                    PlasmaComponents3.ToolButton {
+                        text: "Gradient"
+                        checkable: true
+                        checked: ed.mode === "gradient"
+                        onClicked: { ed.commitEdits(); ed.mode = "gradient"; }
+                    }
+
+                    Item { Layout.fillWidth: true }
+
+                    // Gradient end colours: click one to edit it with the picker
+                    Repeater {
+                        model: ed.mode === "gradient" ? 2 : 0
+                        delegate: RowLayout {
+                            id: chipRow
+                            required property int index
+                            spacing: Kirigami.Units.smallSpacing
+                            PlasmaComponents3.Label { text: chipRow.index === 0 ? "Start" : "End" }
+                            Rectangle {
+                                objectName: "chip" + chipRow.index
+                                implicitWidth: Kirigami.Units.gridUnit * 2
+                                implicitHeight: Kirigami.Units.gridUnit * 1.3
+                                radius: 3
+                                color: C.toQt(chipRow.index === 0 ? ed.gradStart : ed.gradEnd)
+                                border.width: ed.gradTarget === chipRow.index ? 2 : 1
+                                border.color: ed.gradTarget === chipRow.index ? Kirigami.Theme.highlightColor : Kirigami.Theme.disabledTextColor
+                                MouseArea {
+                                    anchors.fill: parent
+                                    onClicked: { ed.commitEdits(); ed.gradTarget = chipRow.index; }
+                                }
+                            }
+                        }
+                    }
+                    PlasmaComponents3.ToolButton {
+                        visible: ed.mode === "gradient"
+                        icon.name: "exchange-positions"
+                        onClicked: { ed.commitEdits(); ed.swapGradient(); }
+                        PlasmaComponents3.ToolTip.text: "Swap start and end"
+                        PlasmaComponents3.ToolTip.visible: hovered
+                    }
+                }
+
+                // ---- picker + values ----
+                RowLayout {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    spacing: Kirigami.Units.largeSpacing
+                    enabled: ed.coloursEditable
+
+                    ColourPicker {
+                        id: picker
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        Layout.minimumHeight: Kirigami.Units.gridUnit * 6
+                        onPicked: rgb => ed.setPanel(rgb, "picker")
+                    }
+
+                    GridLayout {
+                        Layout.alignment: Qt.AlignTop
+                        columns: 2
+                        rowSpacing: Kirigami.Units.smallSpacing
+                        columnSpacing: Kirigami.Units.smallSpacing
+
+                        PlasmaComponents3.Label { text: "Hex" }
+                        PlasmaComponents3.TextField {
+                            id: hexField
+                            Layout.preferredWidth: rSpin.implicitWidth
+                            font.family: "monospace"
+                            validator: RegularExpressionValidator { regularExpression: /#?[0-9a-fA-F]{0,6}/ }
+                            // Apply as soon as six hex digits are typed
+                            onTextEdited: {
+                                const rgb = C.fromHex(text);
+                                if (rgb && !C.same(rgb, ed.current)) {
+                                    ed.setPanel(rgb, "hex");
+                                }
+                            }
+                            onEditingFinished: {
+                                const rgb = C.fromHex(text);
+                                if (rgb) {
+                                    ed.setPanel(rgb, "");
+                                }
+                                text = C.toHex(ed.current);
+                            }
+                        }
+
+                        PlasmaComponents3.Label { text: "R" }
+                        PlasmaComponents3.SpinBox {
+                            id: rSpin
+                            objectName: "rSpin"
+                            from: 0; to: 255; editable: true
+                            Connections {
+                                target: rSpin.contentItem
+                                function onTextEdited() {
+                                    ed.typedChannel(0, rSpin.contentItem.text);
+                                }
+                            }
+                            onValueModified: ed.steppedChannel(0, value, rSpin)
+                        }
+                        PlasmaComponents3.Label { text: "G" }
+                        PlasmaComponents3.SpinBox {
+                            id: gSpin
+                            objectName: "gSpin"
+                            from: 0; to: 255; editable: true
+                            Connections {
+                                target: gSpin.contentItem
+                                function onTextEdited() {
+                                    ed.typedChannel(1, gSpin.contentItem.text);
+                                }
+                            }
+                            onValueModified: ed.steppedChannel(1, value, gSpin)
+                        }
+                        PlasmaComponents3.Label { text: "B" }
+                        PlasmaComponents3.SpinBox {
+                            id: bSpin
+                            objectName: "bSpin"
+                            from: 0; to: 255; editable: true
+                            Connections {
+                                target: bSpin.contentItem
+                                function onTextEdited() {
+                                    ed.typedChannel(2, bSpin.contentItem.text);
+                                }
+                            }
+                            onValueModified: ed.steppedChannel(2, value, bSpin)
+                        }
+                    }
+                }
+            }
+
+            // Overlay explaining why the colour controls are unavailable
+            Rectangle {
+                anchors.fill: parent
+                visible: ed.effect === "rainbow" || ed.selected.length === 0
+                radius: Kirigami.Units.cornerRadius
+                color: Qt.rgba(Kirigami.Theme.backgroundColor.r, Kirigami.Theme.backgroundColor.g,
+                               Kirigami.Theme.backgroundColor.b, 0.8)
+
+                // Swallow clicks so the greyed-out controls underneath can't be used
+                MouseArea {
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    onWheel: wheel => wheel.accepted = true
+                }
+
+                ColumnLayout {
+                    anchors.centerIn: parent
+                    width: parent.width - Kirigami.Units.gridUnit * 2
+                    spacing: Kirigami.Units.smallSpacing
+
+                    Kirigami.Icon {
+                        Layout.alignment: Qt.AlignHCenter
+                        implicitWidth: Kirigami.Units.iconSizes.large
+                        implicitHeight: Kirigami.Units.iconSizes.large
+                        source: ed.effect === "rainbow" ? "color-management" : "edit-select"
+                    }
+                    Kirigami.Heading {
+                        Layout.fillWidth: true
+                        level: 3
+                        horizontalAlignment: Text.AlignHCenter
+                        wrapMode: Text.WordWrap
+                        text: ed.effect === "rainbow" ? "The Rainbow effect doesn't use your colours"
+                                                       : "Click an LED above to edit its colour"
+                    }
+                    PlasmaComponents3.Label {
+                        Layout.fillWidth: true
+                        horizontalAlignment: Text.AlignHCenter
+                        wrapMode: Text.WordWrap
+                        opacity: 0.8
+                        text: ed.effect === "rainbow" ? "Choose another effect to edit colours. Your colours are kept."
+                                                       : "Shift-click selects a range. Ctrl-click adds or removes LEDs."
+                    }
+                }
+            }
+        }
+
+        // ======== Presets ========
+        ColumnLayout {
+            spacing: Kirigami.Units.largeSpacing
+
+            RowLayout {
+                Layout.fillWidth: true
+                PlasmaComponents3.ComboBox {
+                    id: presetBox
+                    Layout.fillWidth: true
+                    model: ed.presetList.map(p => p.user ? p.name + "  (mine)" : p.name)
+                    currentIndex: ed.presetIndex
+                    displayText: ed.presetIndex >= 0 ? ed.presetList[ed.presetIndex].name : "Custom"
+                    onActivated: index => ed.applyColours(ed.presetList[index].cols)
+                }
+                PlasmaComponents3.ToolButton {
+                    icon.name: "list-add"
+                    onClicked: {
+                        nameField.text = ed.presetIndex >= 0 && ed.presetList[ed.presetIndex].user ? ed.presetList[ed.presetIndex].name : "";
+                        presetDialog.open();
+                        nameField.forceActiveFocus();
+                    }
+                    PlasmaComponents3.ToolTip.text: "Add these colours to my presets"
+                    PlasmaComponents3.ToolTip.visible: hovered
+                }
+                PlasmaComponents3.ToolButton {
+                    icon.name: "edit-delete"
+                    enabled: ed.presetIndex >= 0 && ed.presetList[ed.presetIndex].user
+                    onClicked: ed.deletePreset(ed.presetList[ed.presetIndex].name)
+                    PlasmaComponents3.ToolTip.text: "Delete this preset of mine"
+                    PlasmaComponents3.ToolTip.visible: hovered
+                }
+            }
+
+            Kirigami.Heading {
+                Layout.topMargin: Kirigami.Units.smallSpacing
+                level: 5
+                text: "Share codes"
+            }
+            PlasmaComponents3.Label {
+                Layout.fillWidth: true
+                wrapMode: Text.WordWrap
+                opacity: 0.7
+                font: Kirigami.Theme.smallFont
+                text: "Copy a short code for these colours to send to a friend, or paste one you've been sent."
+            }
+            RowLayout {
+                Layout.fillWidth: true
+                PlasmaComponents3.Button {
+                    Layout.fillWidth: true
+                    icon.name: ed.shareFlash === "copied" ? "dialog-ok-apply" : "edit-copy"
+                    text: ed.shareFlash === "copied" ? "Copied" : "Copy code"
+                    enabled: ed.n > 0
+                    onClicked: ed.copyCode()
+                }
+                PlasmaComponents3.Button {
+                    Layout.fillWidth: true
+                    icon.name: ed.shareFlash === "pasted" ? "dialog-ok-apply" : "edit-paste"
+                    text: ed.shareFlash === "pasted" ? "Pasted" : "Paste code"
+                    enabled: ed.n > 0
+                    onClicked: ed.pasteCode()
+                }
+            }
+            Item { Layout.fillHeight: true }
+        }
+
+        // ======== Effect ========
+        GridLayout {
+            columns: 3
+            columnSpacing: Kirigami.Units.largeSpacing
+            rowSpacing: Kirigami.Units.largeSpacing
+
+            PlasmaComponents3.Label { text: "Effect" }
+            PlasmaComponents3.ComboBox {
+                id: effectBox
+                Layout.columnSpan: 2
+                model: ed.effects
+                textRole: "text"
+                onActivated: index => {
+                    const v = ed.effects[index].value;
+                    if (v !== ed.effect) {
+                        ed.record("");
+                        ed.effect = v;
+                        ed.hw.apply({ effect: v });
+                    }
+                }
+            }
+
+            PlasmaComponents3.Label {
+                text: "Speed"
+                enabled: ed.effect !== "manual"
+            }
+            PlasmaComponents3.Slider {
+                id: speedSlider
+                Layout.fillWidth: true
+                enabled: ed.effect !== "manual"
+                from: 0; to: 1; stepSize: 0.05
+                onMoved: {
+                    ed.record("speed");
+                    ed.delay = C.speedToDelay(value);
+                    ed.hw.apply({ delay: ed.delay });
+                }
+            }
+            PlasmaComponents3.Label {
+                text: Math.round(speedSlider.value * 100) + "%"
+                enabled: ed.effect !== "manual"
+                Layout.minimumWidth: Kirigami.Units.gridUnit * 2.5
+            }
+
+            PlasmaComponents3.Label { text: "Brightness" }
+            PlasmaComponents3.Slider {
+                id: brightSlider
+                Layout.fillWidth: true
+                from: 0; to: 1; stepSize: 0.01
+                onMoved: {
+                    ed.record("bright");
+                    ed.scale = C.brightnessToScale(value);
+                    ed.hw.apply({ scale: ed.scale });
+                }
+            }
+            PlasmaComponents3.Label {
+                text: Math.round(brightSlider.value * 100) + "%"
+                Layout.minimumWidth: Kirigami.Units.gridUnit * 2.5
+            }
+
+            Item { width: 1; height: 1 }
+            PlasmaComponents3.Label {
+                Layout.columnSpan: 2
+                Layout.fillWidth: true
+                wrapMode: Text.WordWrap
+                opacity: 0.7
+                font: Kirigami.Theme.smallFont
+                text: ed.scale <= 2 ? "The strip is off at this brightness."
+                                    : C.levelsForScale(ed.scale) + " colour levels per channel at this brightness"
+                                      + (C.levelsForScale(ed.scale) < 32 ? ": gradients will look stepped." : ".")
+            }
+            Item { Layout.columnSpan: 3; Layout.fillHeight: true }
+        }
+    }
+
+    // Dialogs open over the popup instead of adding rows to it.
     Kirigami.PromptDialog {
         id: presetDialog
         title: "Add to my presets"
@@ -677,278 +988,8 @@ ColumnLayout {
         Layout.fillWidth: true
     }
 
-    // ---- colour panel (with an overlay explaining why it's unavailable) ----
-    Item {
-        Layout.fillWidth: true
-        implicitHeight: panelColumn.implicitHeight
-
-        ColumnLayout {
-            id: panelColumn
-            anchors.left: parent.left
-            anchors.right: parent.right
-            spacing: ed.spacing
-
-            // ---- colour panel mode ----
-            RowLayout {
-                Layout.fillWidth: true
-                enabled: ed.coloursEditable
-
-                PlasmaComponents3.ToolButton {
-                    text: "Solid"
-                    checkable: true
-                    checked: ed.mode === "solid"
-                    onClicked: { ed.commitEdits(); ed.mode = "solid"; }
-                }
-                PlasmaComponents3.ToolButton {
-                    text: "Gradient"
-                    checkable: true
-                    checked: ed.mode === "gradient"
-                    onClicked: { ed.commitEdits(); ed.mode = "gradient"; }
-                }
-
-                Item { Layout.fillWidth: true }
-
-                // Gradient end colours: click one to edit it with the picker
-                Repeater {
-                    model: ed.mode === "gradient" ? 2 : 0
-                    delegate: RowLayout {
-                        id: chip
-                        required property int index
-                        spacing: Kirigami.Units.smallSpacing
-                        PlasmaComponents3.Label { text: chip.index === 0 ? "Start" : "End" }
-                        Rectangle {
-                            objectName: "chip" + chip.index
-                            implicitWidth: Kirigami.Units.gridUnit * 2
-                            implicitHeight: Kirigami.Units.gridUnit * 1.3
-                            radius: 3
-                            color: C.toQt(chip.index === 0 ? ed.gradStart : ed.gradEnd)
-                            border.width: ed.gradTarget === chip.index ? 2 : 1
-                            border.color: ed.gradTarget === chip.index ? Kirigami.Theme.highlightColor : Kirigami.Theme.disabledTextColor
-                            MouseArea {
-                                anchors.fill: parent
-                                onClicked: { ed.commitEdits(); ed.gradTarget = chip.index; }
-                            }
-                        }
-                    }
-                }
-                PlasmaComponents3.ToolButton {
-                    visible: ed.mode === "gradient"
-                    icon.name: "exchange-positions"
-                    onClicked: { ed.commitEdits(); ed.swapGradient(); }
-                    PlasmaComponents3.ToolTip.text: "Swap start and end"
-                    PlasmaComponents3.ToolTip.visible: hovered
-                }
-            }
-
-            // ---- colour panel ----
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: Kirigami.Units.largeSpacing
-                enabled: ed.coloursEditable
-
-                ColourPicker {
-                    id: picker
-                    Layout.preferredWidth: Kirigami.Units.gridUnit * 12
-                    Layout.preferredHeight: Kirigami.Units.gridUnit * 9
-                    onPicked: rgb => ed.setPanel(rgb, "picker")
-                }
-
-                GridLayout {
-                    Layout.alignment: Qt.AlignTop
-                    columns: 2
-                    columnSpacing: Kirigami.Units.smallSpacing
-
-                    PlasmaComponents3.Label { text: "Hex" }
-                    PlasmaComponents3.TextField {
-                        id: hexField
-                        Layout.preferredWidth: Kirigami.Units.gridUnit * 6
-                        font.family: "monospace"
-                        validator: RegularExpressionValidator { regularExpression: /#?[0-9a-fA-F]{0,6}/ }
-                        // Apply as soon as six hex digits are typed
-                        onTextEdited: {
-                            const rgb = C.fromHex(text);
-                            if (rgb && !C.same(rgb, ed.current)) {
-                                ed.setPanel(rgb, "hex");
-                            }
-                        }
-                        onEditingFinished: {
-                            const rgb = C.fromHex(text);
-                            if (rgb) {
-                                ed.setPanel(rgb, "");
-                            }
-                            text = C.toHex(ed.current);
-                        }
-                    }
-
-                    PlasmaComponents3.Label { text: "Red" }
-                    PlasmaComponents3.SpinBox {
-                        id: rSpin
-                        objectName: "rSpin"
-                        from: 0; to: 255; editable: true
-                        Connections {
-                            target: rSpin.contentItem
-                            function onTextEdited() {
-                                ed.typedChannel(0, rSpin.contentItem.text);
-                            }
-                        }
-                        onValueModified: ed.steppedChannel(0, value, rSpin)
-                    }
-                    PlasmaComponents3.Label { text: "Green" }
-                    PlasmaComponents3.SpinBox {
-                        id: gSpin
-                        objectName: "gSpin"
-                        from: 0; to: 255; editable: true
-                        Connections {
-                            target: gSpin.contentItem
-                            function onTextEdited() {
-                                ed.typedChannel(1, gSpin.contentItem.text);
-                            }
-                        }
-                        onValueModified: ed.steppedChannel(1, value, gSpin)
-                    }
-                    PlasmaComponents3.Label { text: "Blue" }
-                    PlasmaComponents3.SpinBox {
-                        id: bSpin
-                        objectName: "bSpin"
-                        from: 0; to: 255; editable: true
-                        Connections {
-                            target: bSpin.contentItem
-                            function onTextEdited() {
-                                ed.typedChannel(2, bSpin.contentItem.text);
-                            }
-                        }
-                        onValueModified: ed.steppedChannel(2, value, bSpin)
-                    }
-                }
-            }
-        }
-
-        Rectangle {
-            anchors.fill: parent
-            visible: ed.effect === "rainbow" || ed.selected.length === 0
-            radius: Kirigami.Units.cornerRadius
-            color: Qt.rgba(Kirigami.Theme.backgroundColor.r, Kirigami.Theme.backgroundColor.g,
-                           Kirigami.Theme.backgroundColor.b, 0.8)
-
-            // Swallow clicks so the greyed-out controls underneath can't be used
-            MouseArea {
-                anchors.fill: parent
-                hoverEnabled: true
-                onWheel: wheel => wheel.accepted = true
-            }
-
-            ColumnLayout {
-                anchors.centerIn: parent
-                width: parent.width - Kirigami.Units.gridUnit * 2
-                spacing: Kirigami.Units.smallSpacing
-
-                Kirigami.Icon {
-                    Layout.alignment: Qt.AlignHCenter
-                    implicitWidth: Kirigami.Units.iconSizes.large
-                    implicitHeight: Kirigami.Units.iconSizes.large
-                    source: ed.effect === "rainbow" ? "color-management" : "edit-select"
-                }
-                Kirigami.Heading {
-                    Layout.fillWidth: true
-                    level: 3
-                    horizontalAlignment: Text.AlignHCenter
-                    wrapMode: Text.WordWrap
-                    text: ed.effect === "rainbow" ? "The Rainbow effect doesn't use your colours"
-                                                   : "Click an LED above to edit its colour"
-                }
-                PlasmaComponents3.Label {
-                    Layout.fillWidth: true
-                    horizontalAlignment: Text.AlignHCenter
-                    wrapMode: Text.WordWrap
-                    opacity: 0.8
-                    text: ed.effect === "rainbow" ? "Choose another effect to edit colours. Your colours are kept."
-                                                   : "Shift-click selects a range. Ctrl-click adds or removes LEDs."
-                }
-            }
-        }
-    }
-
-    Kirigami.Separator {
-        Layout.fillWidth: true
-    }
-
-    // ---- effect / speed / brightness ----
-    GridLayout {
-        Layout.fillWidth: true
-        columns: 3
-        columnSpacing: Kirigami.Units.largeSpacing
-
-        PlasmaComponents3.Label { text: "Effect" }
-        PlasmaComponents3.ComboBox {
-            id: effectBox
-            Layout.columnSpan: 2
-            model: ed.effects
-            textRole: "text"
-            onActivated: index => {
-                const v = ed.effects[index].value;
-                if (v !== ed.effect) {
-                    ed.record("");
-                    ed.effect = v;
-                    ed.hw.apply({ effect: v });
-                }
-            }
-        }
-
-        PlasmaComponents3.Label {
-            text: "Speed"
-            enabled: ed.effect !== "manual"
-        }
-        PlasmaComponents3.Slider {
-            id: speedSlider
-            Layout.fillWidth: true
-            enabled: ed.effect !== "manual"
-            from: 0; to: 1; stepSize: 0.05
-            onMoved: {
-                ed.record("speed");
-                ed.delay = C.speedToDelay(value);
-                ed.hw.apply({ delay: ed.delay });
-            }
-        }
-        PlasmaComponents3.Label {
-            text: Math.round(speedSlider.value * 100) + "%"
-            enabled: ed.effect !== "manual"
-            Layout.minimumWidth: Kirigami.Units.gridUnit * 2.5
-        }
-
-        PlasmaComponents3.Label { text: "Brightness" }
-        PlasmaComponents3.Slider {
-            id: brightSlider
-            Layout.fillWidth: true
-            from: 0; to: 1; stepSize: 0.01
-            onMoved: {
-                ed.record("bright");
-                ed.scale = C.brightnessToScale(value);
-                ed.hw.apply({ scale: ed.scale });
-            }
-        }
-        PlasmaComponents3.Label {
-            text: Math.round(brightSlider.value * 100) + "%"
-            Layout.minimumWidth: Kirigami.Units.gridUnit * 2.5
-        }
-
-        Item { width: 1; height: 1 }
-        PlasmaComponents3.Label {
-            Layout.columnSpan: 2
-            opacity: 0.7
-            font: Kirigami.Theme.smallFont
-            text: ed.scale <= 2 ? "The strip is off at this brightness."
-                                : C.levelsForScale(ed.scale) + " colour levels per channel at this brightness"
-                                  + (C.levelsForScale(ed.scale) < 32 ? ": gradients will look stepped." : ".")
-        }
-    }
-
-    Kirigami.Separator {
-        Layout.fillWidth: true
-    }
-
     // ================= Save (persist the design via Steam's settings) =================
-    // One fixed-height row: nothing here may change height while editing, because the popup
-    // grows away from the panel and would shift everything above it (e.g. the picker mid-drag).
+    // One fixed-height row, so nothing changes height while editing.
     RowLayout {
         Layout.fillWidth: true
         Layout.preferredHeight: Kirigami.Units.gridUnit * 2
@@ -978,7 +1019,7 @@ ColumnLayout {
                 : !ed.hw.saved ? "Checking your saved design…"
                 : !ed.saveAvailable ? ed.hw.saved.reason
                 : ed.saveResult && ed.saveResult.ok && ed.saveResult.steamWasRunning ? "Saved. Reopen Steam when you're ready."
-                : ed.unsaved ? "Not saved: these changes are temporary"
+                : ed.unsaved ? "Not saved: changes are temporary"
                 : "Saved"
             PlasmaComponents3.ToolTip.text: ed.unsaved && !ed.hw.saving && !ed.saveResult
                 ? "Until you save, your saved design comes back when you restart, log in or switch modes."

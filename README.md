@@ -3,7 +3,7 @@
 A KDE Plasma 6 widget for customising the Steam Machine's front LED strip from Desktop Mode.
 Changes show on the strip immediately; **Save** makes them permanent (Desktop and Game Mode).
 
-> Status: version 1.0.0. This README is also the working spec.
+> Status: version 1.0.1. This README is also the working spec.
 
 <p>
   <img src="docs/screenshots/editor.png" alt="The editor showing the Synthwave design" width="420">
@@ -19,7 +19,7 @@ Changes show on the strip immediately; **Save** makes them permanent (Desktop an
   `kpackagetool6 -t Plasma/Applet -i steam-machine-rgb-control-<version>.plasmoid`, or use
   *Install Widget From Local File…* in the Get New Widgets dialog.
 
-Then add **Steam Machine RGB Control** to your panel or desktop.
+It appears in the system tray straight away. To hide it, use the tray's *Configure System Tray* → *Entries*; you can also add it to a panel or the desktop like any other widget.
 
 ## Building and testing
 
@@ -48,8 +48,11 @@ easy to share.
 ## Features
 
 ### Form
-- Taskbar/system-tray icon; clicking opens the editor popup.
-- The same widget can be placed on the desktop for a larger, always-visible editor.
+- System-tray icon, added automatically on install; clicking opens the editor popup.
+- The tray gives every popup a fixed 24 × 24 grid units (title bar included), so the editor is
+  designed for that: the swatches, selection, undo/redo and Save are always visible, and the rest is
+  split into **Colour**, **Presets** and **Effect** tabs. `tests/tst_traysize.qml` checks it fits.
+- It can also be placed on a panel or the desktop like any other widget.
 
 ### Strip editor
 - 17 swatches shown left → right as seen from the front (hardware index 16 is leftmost).

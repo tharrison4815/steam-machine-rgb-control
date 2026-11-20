@@ -9,12 +9,15 @@
         "BugReportUrl": "https://github.com/tharrison4815/steam-machine-rgb-control/issues",
         "Category": "Utilities",
         "Description": "Customise the Steam Machine's front LED strip: per-LED colours, gradients, effects, presets and share codes",
+        "EnabledByDefault": true,
         "Icon": "color-management",
         "Id": "io.github.tharrison4815.steammachinergb",
         "License": "GPL-2.0-or-later",
         "Name": "Steam Machine RGB Control",
-        "Version": "1.0.0",
+        "Version": "1.0.1",
         "Website": "https://github.com/tharrison4815/steam-machine-rgb-control"
     },
-    "X-Plasma-API-Minimum-Version": "6.0"
+    "X-Plasma-API-Minimum-Version": "6.0",
+    "X-Plasma-NotificationArea": "true",
+    "X-Plasma-NotificationAreaCategory": "Hardware"
 }
