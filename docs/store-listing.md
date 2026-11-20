@@ -54,7 +54,7 @@ First release.
 
 ## Other form fields
 
-- **Category:** the Plasma 6 widgets category (not Plasma 5).
+- **Category:** Plasma 6 Applets (Desktop Extensions › KDE Plasma Extensions › Plasma 6 Extensions › Plasma 6 Applets)
 - **Licence:** GPL-2.0-or-later (GPLv2+)
 - **Source / homepage link:** https://github.com/tharrison4815/steam-machine-rgb-control
 - **File:** `dist/steam-machine-rgb-control-1.0.0.plasmoid` (build with `python3 tools/build-plasmoid.py`)
